@@ -1,4 +1,6 @@
 import streamlit as st
+import pandas as pd
+import os
 
 # ----------------------------
 # Page
@@ -149,6 +151,17 @@ def compute_scores():
 
 
 scores = compute_scores()
+
+# ----------------------------
+# Sidebar
+# ----------------------------
+with st.sidebar:
+    st.markdown("## Research")
+    show_research = st.checkbox(
+        "Ecosystem Login Adoption Research",
+        value=False,
+        help="Show a research panel that estimates how often high-traffic domains offer Sign in with Google (public-page detection only).",
+    )
 
 # ----------------------------
 # Layout
@@ -672,3 +685,63 @@ Note: Takeout still exports the full mailbox, but labeling helps you *organize v
     st.write("- Maintain periodic Google Takeout exports.")
 
     st.info("This report is a snapshot of your current configuration. It’s designed to make structure visible.")
+
+# ----------------------------
+# RESEARCH PANEL (optional)
+# ----------------------------
+if "show_research" in globals() and show_research:
+    st.divider()
+    st.header("🌍 Consumer Google Login Adoption (Research Panel)")
+    st.markdown(
+        "This panel analyzes a domain sample and detects whether public login surfaces appear to offer **Sign in with Google**. "
+        "It does **not** attempt authentication or collect user data."
+    )
+
+    default_path = os.path.join("assets", "research", "google_login_results.csv")
+    uploaded = st.file_uploader("Upload google_login_results.csv (optional)", type=["csv"], key="research_upload")
+
+    if uploaded is not None:
+        df = pd.read_csv(uploaded)
+    elif os.path.exists(default_path):
+        df = pd.read_csv(default_path)
+    else:
+        st.info(
+            "To use this panel, run the detector script and save the output as `assets/research/google_login_results.csv`, "
+            "or upload the CSV here.
+
+"
+            "Expected columns: `domain`, `google_login_detected` (optional: `apple_login_detected`, `facebook_login_detected`, `evidence_url`)."
+        )
+        st.stop()
+
+    def _count_true(series: pd.Series) -> int:
+        if series is None:
+            return 0
+        s = series.astype(str).str.strip().str.lower()
+        return int(s.isin(["true", "1", "yes", "y", "t"]).sum())
+
+    total = len(df)
+    google_yes = _count_true(df.get("google_login_detected"))
+    apple_yes = _count_true(df.get("apple_login_detected"))
+    facebook_yes = _count_true(df.get("facebook_login_detected"))
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Domains Scanned", f"{total:,}")
+    c2.metric("Google Login Adoption", f"{(google_yes / total * 100):.1f}%" if total else "—")
+    c3.metric("Apple Login Adoption", f"{(apple_yes / total * 100):.1f}%" if total else "—")
+
+    st.subheader("Provider comparison")
+    provider_df = pd.DataFrame(
+        {
+            "Provider": ["Google", "Apple", "Facebook"],
+            "Adoption %": [
+                (google_yes / total * 100) if total else 0,
+                (apple_yes / total * 100) if total else 0,
+                (facebook_yes / total * 100) if total else 0,
+            ],
+        }
+    )
+    st.bar_chart(provider_df.set_index("Provider"))
+
+    st.subheader("Raw results")
+    st.dataframe(df, use_container_width=True)
