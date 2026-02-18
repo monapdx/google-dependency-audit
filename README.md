@@ -1,5 +1,9 @@
 # Google Dependency Audit (Streamlit)
 
+<p align="center">
+  <img src="assets/hero.png" alt="Google Dependency Audit hero" width="800">
+</p>
+
 A Streamlit questionnaire that scores **how centralized your digital life is around a single Google account** across:
 
 - Identity Centralization
@@ -8,10 +12,6 @@ A Streamlit questionnaire that scores **how centralized your digital life is aro
 - Resilience / Redundancy
 
 It produces a composite **Lock‑In Index** and a results page with practical mitigation guidance (including a “Selective Backup Strategy”).
-
-<p align="center">
-  <img src="assets/hero.png" alt="Google Dependency Audit hero" width="800">
-</p>
 
 ## Quick start (local)
 
