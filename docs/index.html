@@ -4,35 +4,332 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Google Dependency Audit</title>
+    <meta
+      name="description"
+      content="Audit how dependent your digital life is on Google and get practical steps to reduce risk."
+    />
+
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; }
-      .wrap { max-width: 860px; margin: 0 auto; padding: 64px 20px; }
-      h1 { margin: 0 0 12px; font-size: 40px; }
-      p { margin: 0 0 24px; font-size: 18px; line-height: 1.5; opacity: 0.85; }
-      .btn {
-        display: inline-block; padding: 14px 18px; border-radius: 12px;
-        text-decoration: none; font-weight: 700; border: 1px solid #ddd;
+      :root{
+        --bg: #f7f8fb;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: rgba(15, 23, 42, .72);
+        --border: rgba(15, 23, 42, .10);
+        --shadow: 0 12px 30px rgba(15, 23, 42, .08);
+        --radius: 18px;
+        --pad: 18px;
       }
-      .btn:hover { border-color: #bbb; }
-      .muted { margin-top: 18px; font-size: 14px; opacity: 0.7; }
-      code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body{
+        margin:0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--text);
+        background:
+          radial-gradient(1200px 800px at 15% -10%, rgba(59,130,246,.12), transparent 55%),
+          radial-gradient(1200px 800px at 95% 0%, rgba(34,197,94,.10), transparent 50%),
+          radial-gradient(900px 700px at 50% 115%, rgba(234,179,8,.10), transparent 45%),
+          var(--bg);
+      }
+
+      a{ color: inherit; }
+      .wrap{
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 28px 18px 40px;
+      }
+
+      header{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap: 14px;
+        padding: 10px 6px 20px;
+      }
+
+      .brand{
+        display:flex;
+        flex-direction:column;
+        gap: 4px;
+      }
+      .brand h1{
+        margin:0;
+        font-size: 20px;
+        letter-spacing: .2px;
+      }
+      .brand p{
+        margin:0;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .pill{
+        display:inline-flex;
+        align-items:center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.65);
+        border: 1px solid var(--border);
+        backdrop-filter: blur(10px);
+        font-size: 13px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .layout{
+        display:grid;
+        grid-template-columns: 1fr 340px;
+        gap: 18px;
+        align-items:start;
+      }
+
+      @media (max-width: 980px){
+        .layout{
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card{
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow:hidden;
+      }
+
+      .card .inner{
+        padding: 22px;
+      }
+
+      .hero h2{
+        margin:0 0 10px;
+        font-size: 34px;
+        letter-spacing: -0.6px;
+        line-height: 1.1;
+      }
+
+      .hero p{
+        margin:0 0 16px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.55;
+        max-width: 65ch;
+      }
+
+      .actions{
+        display:flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .btn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: #fff;
+        text-decoration:none;
+        font-weight: 700;
+        font-size: 14px;
+        line-height: 1;
+        transition: transform .06s ease, box-shadow .12s ease, border-color .12s ease;
+        box-shadow: 0 8px 18px rgba(15,23,42,.06);
+      }
+      .btn:hover{
+        border-color: rgba(15,23,42,.18);
+        box-shadow: 0 10px 22px rgba(15,23,42,.09);
+      }
+      .btn:active{
+        transform: translateY(1px);
+      }
+
+      .btn.primary{
+        border-color: rgba(59,130,246,.35);
+        background: linear-gradient(180deg, rgba(59,130,246,.12), rgba(59,130,246,.06));
+      }
+
+      .btn.small{
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-weight: 700;
+      }
+
+      .meta{
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      /* Sidebar */
+      .sidebar .inner{
+        padding: 18px;
+      }
+
+      .ebook{
+        display:flex;
+        flex-direction:column;
+        gap: 12px;
+      }
+
+      .ebook-top{
+        display:flex;
+        gap: 12px;
+        align-items:flex-start;
+      }
+
+      .cover{
+        width: 86px;
+        min-width: 86px;
+        aspect-ratio: 2 / 3;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: #fff;
+        overflow:hidden;
+        box-shadow: 0 10px 22px rgba(15,23,42,.10);
+      }
+      .cover img{
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display:block;
+      }
+
+      .ebook h3{
+        margin: 2px 0 6px;
+        font-size: 16px;
+        letter-spacing: -0.2px;
+      }
+      .ebook p{
+        margin:0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .stack{
+        display:flex;
+        flex-direction:column;
+        gap: 10px;
+        margin-top: 4px;
+      }
+
+      .link{
+        display:inline-flex;
+        gap: 8px;
+        align-items:center;
+        color: var(--muted);
+        text-decoration:none;
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .link:hover{
+        color: rgba(15,23,42,.86);
+      }
+
+      .list{
+        margin: 10px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      footer{
+        margin-top: 18px;
+        text-align:center;
+        color: var(--muted);
+        font-size: 12px;
+        padding: 12px 0 0;
+      }
     </style>
   </head>
+
   <body>
     <div class="wrap">
-      <h1>Google Dependency Audit</h1>
-      <p>
-        A Streamlit questionnaire that scores how centralized your digital life is around a single Google account,
-        and gives practical mitigation guidance.
-      </p>
+      <header>
+        <div class="brand">
+          <h1>Google Dependency Audit</h1>
+          <p>Risk score + practical steps to reduce single-account dependency</p>
+        </div>
+        <div class="pill">Live demo + ebook blueprint</div>
+      </header>
 
-      <a class="btn" href="https://app-dependency-audit-boht9tdfgfn9asnje4dwuy.streamlit.app/" target="_blank" rel="noreferrer">
-        Launch Live Demo →
-      </a>
+      <div class="layout">
+        <!-- Main -->
+        <main class="card hero">
+          <div class="inner">
+            <h2>Audit your Google dependency.</h2>
+            <p>
+              This project helps you identify which parts of your digital life are tightly coupled to a single Google
+              account—then gives concrete recommendations to reduce risk (lockouts, bans, data loss, identity issues).
+            </p>
 
-      <div class="muted">
-        Source code on GitHub • Live demo hosted on <code>streamlit.app</code>
+            <div class="actions">
+              <a class="btn primary" href="https://app-dependency-audit-boht9tdfgfn9asnje4dwuy.streamlit.app/" target="_blank" rel="noreferrer">
+                Launch Live Demo →
+              </a>
+              <a class="btn" href="https://github.com/monapdx/google-dependency-audit" target="_blank" rel="noreferrer">
+                View on GitHub ↗
+              </a>
+            </div>
+
+            <div class="meta">
+              <strong>Tip:</strong> If you’re using this for your own audit, consider doing it in a calm moment and saving
+              the results somewhere outside Google (local notes, printed copy, or another cloud).
+            </div>
+          </div>
+        </main>
+
+        <!-- Sidebar -->
+        <aside class="card sidebar">
+          <div class="inner">
+            <div class="ebook">
+              <div class="ebook-top">
+                <div class="cover">
+                  <!-- Put your cover image in /docs and update the filename here -->
+                  <img src="./cover.png" alt="Ebook cover" />
+                </div>
+                <div>
+                  <h3>The Google Dependency Blueprint</h3>
+                  <p>
+                    A concise, practical guide to exporting, backing up, and de-risking your most important Google data.
+                  </p>
+                </div>
+              </div>
+
+              <div class="stack">
+                <!-- Put your PDF in /docs and update the filename here -->
+                <a class="btn" href="./google-dependency-blueprint.pdf" download>
+                  Download PDF ⭳
+                </a>
+                <a class="link" href="./google-dependency-blueprint.pdf" target="_blank" rel="noreferrer">
+                  Open in browser ↗
+                </a>
+              </div>
+
+              <ul class="list">
+                <li>Service-by-service export notes</li>
+                <li>Selective backup strategy</li>
+                <li>Checklist + recommended cadence</li>
+              </ul>
+            </div>
+          </div>
+        </aside>
       </div>
+
+      <footer>
+        Built by monapdx • Hosted with GitHub Pages + Streamlit
+      </footer>
     </div>
   </body>
 </html>
