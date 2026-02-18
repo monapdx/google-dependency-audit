@@ -1,4 +1,4 @@
-# Google Dependency Audit (Streamlit)
+# Google Dependency Audit
 
 <p align="center">
   <img src="assets/hero.png" alt="Google Dependency Audit hero" width="800">
