@@ -1,7 +1,7 @@
 # Google Dependency Audit
 
 <p align="center">
-  <img src="assets/hero.png" alt="Google Dependency Audit hero" width="800">
+  <img src="docs/hero.png" alt="Google Dependency Audit hero" width="800">
 </p>
 
 A Streamlit questionnaire that scores **how centralized your digital life is around a single Google account** across:
