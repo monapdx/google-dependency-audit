@@ -187,16 +187,27 @@
         align-items:flex-start;
       }
 
-      .cover{
-        width: 86px;
-        min-width: 86px;
-        aspect-ratio: 2 / 3;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        background: #fff;
-        overflow:hidden;
-        box-shadow: 0 10px 22px rgba(15,23,42,.10);
-      }
+.cover{
+  width: 100%;
+  max-width: 280px;   /* controls size */
+  margin: 0 auto;     /* center it */
+  aspect-ratio: 3/4;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #eef1f6;
+  box-shadow: 0 12px 28px rgba(15,23,42,0.12);
+}
+
+.cover{
+  transform: perspective(1000px) rotateY(-2deg);
+  transition: transform .25s ease;
+}
+
+.cover:hover{
+  transform: perspective(1000px) rotateY(0deg) scale(1.02);
+}
+
+
       .cover img{
         width: 100%;
         height: 100%;
@@ -258,6 +269,71 @@
         font-size: 12px;
         padding: 12px 0 0;
       }
+	  .hero img {
+		width: 100%;
+		height: auto;
+		display: block;
+		margin: 16px 0;
+		border-radius: 16px;
+}
+
+/* --- Hero image: responsive + clean --- */
+.hero img{
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 16px 0;
+  border-radius: 16px;
+}
+
+/* --- Mobile polish --- */
+@media (min-width: 768px){
+  .cover{
+    max-width: 340px;
+  }
+}
+
+
+  header{
+    padding: 8px 4px 16px;
+  }
+
+  .brand h1{
+    font-size: 18px;
+  }
+
+  .brand p{
+    font-size: 13px;
+  }
+
+  .hero h2{
+    font-size: 28px;
+    letter-spacing: -0.4px;
+  }
+
+  .hero p{
+    font-size: 15px;
+  }
+
+  .hero img{
+    margin: 12px 0;
+    border-radius: 14px;
+  }
+
+  .actions{
+    gap: 8px;
+  }
+
+  .btn{
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pill{
+    display: none; /* optional: hides the "Live demo + ebook blueprint" pill on small screens */
+  }
+}
+	  
     </style>
   </head>
 
@@ -276,7 +352,7 @@
         <main class="card hero">
           <div class="inner">
             <h2>Audit your Google dependency.</h2>
-			<img src="https://raw.githubusercontent.com/monapdx/google-dependency-audit/refs/heads/main/assets/hero-small.png">
+			<img src="https://raw.githubusercontent.com/monapdx/google-dependency-audit/refs/heads/main/docs/hero-small.png">
             <p>
               This project helps you identify which parts of your digital life are tightly coupled to a single Google
               account—then gives concrete recommendations to reduce risk (lockouts, bans, data loss, identity issues).
