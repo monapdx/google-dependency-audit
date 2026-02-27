@@ -1,0 +1,278 @@
+:root {
+  color-scheme: light;
+
+  --bg: #f7faf8;
+  --paper: #ffffff;
+
+  --text: #0f1a13;
+  --muted: rgba(15, 26, 19, 0.62);
+  --muted2: rgba(15, 26, 19, 0.45);
+
+  --border: rgba(15, 26, 19, 0.14);
+  --border2: rgba(15, 26, 19, 0.10);
+
+  --shadow: 0 10px 26px rgba(16, 24, 18, 0.10);
+
+  --accent: rgb(80, 173, 102);
+  --accentSoft: rgba(80, 173, 102, 0.14);
+  --accentSoft2: rgba(80, 173, 102, 0.22);
+
+  --radius: 16px;
+  --radius2: 12px;
+
+  --max: 1180px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  color: var(--text);
+  background-color: var(--bg);
+
+  /* Your seamless tile */
+  background-image:
+    url("/graph-paper.png"),
+    radial-gradient(1100px 560px at 15% 10%, rgba(80,173,102,0.10), transparent 55%),
+    radial-gradient(900px 520px at 85% 0%, rgba(80,173,102,0.08), transparent 55%);
+  background-repeat: repeat, no-repeat, no-repeat;
+  background-size: auto, cover, cover;
+  background-attachment: fixed, fixed, fixed;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.container {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 22px 18px 42px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: -0.4px;
+}
+.subtle {
+  margin: 6px 0 0 0;
+  color: var(--muted);
+  max-width: 68ch;
+}
+
+.grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 980px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: rgba(255,255,255,0.88);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+}
+.cardPad { padding: 16px; }
+
+.hr {
+  height: 1px;
+  background: var(--border2);
+  border: 0;
+  margin: 14px 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.78);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.80);
+  color: rgba(15,26,19,0.75);
+}
+
+button {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.86);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
+  font-weight: 700;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(80,173,102,0.45);
+  box-shadow: 0 8px 18px rgba(16,24,18,0.10);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+button.primary {
+  border-color: rgba(80,173,102,0.55);
+  background: linear-gradient(180deg, rgba(80,173,102,0.16), rgba(80,173,102,0.10));
+}
+
+button.ghost {
+  background: rgba(255,255,255,0.50);
+}
+
+.progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15,26,19,0.08);
+  overflow: hidden;
+  border: 1px solid var(--border2);
+}
+.progress > div {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(80,173,102,0.95), rgba(80,173,102,0.55));
+  transition: width 220ms ease;
+}
+
+.tabsWrap {
+  margin-top: 12px;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.74);
+  padding: 6px;
+  overflow: hidden;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  position: relative;
+  z-index: 2;
+}
+
+.tabBtn {
+  width: 100%;
+  border-radius: 12px;
+  padding: 10px 10px;
+  font-weight: 800;
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+.tabBtn:hover { transform: none; box-shadow: none; border-color: rgba(80,173,102,0.22); }
+
+.tabBtn.active {
+  border-color: rgba(80,173,102,0.35);
+}
+
+.tabIndicator {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: calc((100% - 18px) / 4);
+  height: calc(100% - 12px);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(80,173,102,0.18), rgba(80,173,102,0.10));
+  border: 1px solid rgba(80,173,102,0.25);
+  box-shadow: 0 10px 18px rgba(16,24,18,0.08);
+  transform: translateX(calc(var(--tabX) * 100% + var(--tabX) * 6px));
+  transition: transform 260ms cubic-bezier(.2,.8,.2,1);
+  z-index: 1;
+}
+
+.q {
+  padding: 12px;
+  border-radius: var(--radius2);
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.78);
+}
+
+.q h4 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: -0.1px;
+}
+
+.options { display: grid; gap: 8px; }
+
+.opt {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.84);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+.opt:hover {
+  border-color: rgba(80,173,102,0.35);
+  background: rgba(80,173,102,0.06);
+  transform: translateY(-1px);
+}
+.opt input { accent-color: var(--accent); }
+.opt .txt { color: rgba(15,26,19,0.88); font-size: 13.7px; font-weight: 650; }
+
+.help {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.meterRow { display: grid; gap: 8px; margin-top: 12px; }
+.meterTitle { display:flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.meterTitle strong { font-size: 13px; }
+.meterTitle span { font-size: 12px; color: var(--muted); }
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 980px) { .twoCol { grid-template-columns: 1fr; } }
+
+.callout {
+  border: 1px dashed rgba(80,173,102,0.45);
+  background: rgba(80,173,102,0.08);
+  border-radius: 14px;
+  padding: 12px;
+  color: rgba(15,26,19,0.80);
+}
