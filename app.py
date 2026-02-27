@@ -54,7 +54,52 @@ def init_state():
         st.session_state.submitted = False
 
 
+def init_wizard_state():
+    if "step" not in st.session_state:
+        st.session_state.step = 0  # 0..3
+
+
 init_state()
+init_wizard_state()
+
+# ----------------------------
+# Styling (slicker + subtle animation)
+# ----------------------------
+st.markdown(
+    """
+<style>
+/* Slightly tighter max width feel while still "wide" */
+.block-container { padding-top: 1.2rem; }
+
+/* Wizard "card" */
+.audit-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 16px;
+  padding: 18px 18px 12px 18px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+}
+
+/* Subtle section transition */
+@keyframes slideFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0px); }
+}
+.step-anim { animation: slideFadeIn 220ms ease-out; }
+
+/* Make radios feel more tappable without changing theme colors */
+div[role="radiogroup"] label {
+  padding: 8px 10px;
+  border-radius: 10px;
+  margin: 2px 0;
+}
+
+/* Reduce some vertical bloat */
+.small-gap { margin-top: 0.25rem; }
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
 # ----------------------------
 # Required question keys (gate Results)
@@ -65,6 +110,21 @@ REQUIRED_KEYS = [
     "wf_q1", "wf_q2", "wf_q3", "wf_q4",
     "re_q1", "re_q2", "re_q3", "re_q4",
 ]
+
+STEP_TITLES = ["Identity", "Archive", "Workflow", "Resilience"]
+
+STEP_KEYS = [
+    ["id_q1", "id_q2", "id_q3", "id_q4", "id_q5"],
+    ["ar_q1", "ar_q2", "ar_q3", "ar_q4"],
+    ["wf_q1", "wf_q2", "wf_q3", "wf_q4"],
+    ["re_q1", "re_q2", "re_q3", "re_q4"],
+]
+
+
+def step_missing(step_idx: int) -> list[str]:
+    keys = STEP_KEYS[step_idx]
+    return [k for k in keys if st.session_state.get(k) is None]
+
 
 # ----------------------------
 # Common: compute scores from current answers
@@ -156,249 +216,291 @@ scores = compute_scores()
 left, right = st.columns([1.35, 1])
 
 # ----------------------------
-# AUDIT PAGE
+# AUDIT PAGE (Wizard / Tabs)
 # ----------------------------
 if st.session_state.page == "audit":
     with left:
         st.subheader("Audit")
-        st.caption("Note: When uncertainty is selected, exposure is scored conservatively.")
+        st.caption("Answer section-by-section. Next/Back moves you through the audit.")
 
-        st.markdown("### 1) Identity Centralization")
+        step = int(st.session_state.step)
+        st.write(f"### Step {step + 1} of 4 — {STEP_TITLES[step]}")
+        st.progress(int(((step + 1) / 4) * 100))
 
-        st.radio(
-            "Is your Gmail address your primary email address?",
-            ["Yes, for almost everything", "Yes, but I also actively use another email", "No"],
-            index=None,
-            key="id_q1",
-        )
-
-        st.radio(
-            "Is this Gmail account used as the password reset email for most of your important accounts?",
-            ["Yes, for most", "For some", "No", "I'm not sure"],
-            index=None,
-            key="id_q2",
-            help=(
-                "How to check quickly:\n"
-                "- Think of your top 10 accounts (banking, phone, utilities, domain registrar, creator platforms, "
-                "shopping, identity/credit, etc.)\n"
-                "- Check each account’s “email / recovery” settings.\n\n"
-                "If you’re not sure, assume this is a risk: uncertainty often means the Gmail account is a central reset node."
-            ),
-        )
-
-        st.radio(
-            "Do you use “Sign in with Google” for high-impact services?",
-            ["Yes, frequently", "Occasionally", "Rarely", "Never", "I don't know"],
-            index=None,
-            key="id_q3",
-            help=(
-                "High-impact examples include:\n"
-                "- Banking or financial apps\n"
-                "- Subscription services\n"
-                "- Work or creator platforms\n"
-                "- Domain registrars\n\n"
-                "Check your connected services here:\n"
-                "https://myaccount.google.com/connections\n\n"
-                "If you see 10+ apps listed and don't recognize them all, dependency is likely high."
-            ),
-        )
-        st.caption("Optional: check your connected services here → https://myaccount.google.com/connections")
-
-        st.radio(
-            "If your Google account were inaccessible tomorrow, would you immediately lose access to services that are difficult to recreate?",
-            ["Yes", "Possibly", "No", "I'm not sure"],
-            index=None,
-            key="id_q4",
-            help=(
-                "“Difficult to recreate” examples:\n"
-                "- Accounts that rely on Gmail for login + reset\n"
-                "- OAuth-based accounts (Sign in with Google)\n"
-                "- Accounts protected by Google Voice / Google Authenticator\n"
-                "- Long-term archives (email history, photos)\n\n"
-                "If you haven’t tested recovery on a few key accounts recently, it’s normal to be unsure."
-            ),
-        )
-
-        st.radio(
-            "Have you used Google Voice as your primary long-term phone number for account verification or important contact?",
-            ["Yes, for years and across many services", "Yes, for some important services", "No", "I'm not sure"],
-            index=None,
-            key="id_q5",
-            help=(
-                "How to check:\n"
-                "- Review your account recovery and 2FA phone numbers for key services.\n"
-                "- If many accounts list a Google Voice number (instead of your carrier number), that’s a dependency.\n\n"
-                "Tip: Search your password manager for the Voice number, if you store it in notes."
-            ),
-        )
-
-        st.markdown("### 2) Archive Concentration")
-
-        st.radio(
-            "Are your primary documents stored in Google Drive?",
-            ["Yes, almost all", "Yes, but I also store copies elsewhere", "Some", "No"],
-            index=None,
-            key="ar_q1",
-            help=(
-                "This refers to the *source of truth*.\n\n"
-                "If your important docs live primarily in Drive and you’d feel pain losing them, select a higher option. "
-                "If Drive is just a convenience layer and you keep local copies, select lower."
-            ),
-        )
-
-        st.radio(
-            "Are your photos primarily stored in Google Photos?",
-            ["Yes, exclusively", "Yes, but I maintain backups", "Some", "No"],
-            index=None,
-            key="ar_q2",
-            help=(
-                "Backups mean: photos exist somewhere outside Google (local drive, external drive, another provider) "
-                "and are accessible without logging into Google."
-            ),
-        )
-
-        st.radio(
-            "Is your Gmail archive important to your personal or professional history?",
-            ["Extremely important", "Somewhat important", "Not very important", "Not important"],
-            index=None,
-            key="ar_q3",
-            help=(
-                "If you rely on your inbox for receipts, legal/paperwork trails, work history, important relationships, "
-                "or long-term memory, your Gmail archive is structurally significant."
-            ),
-        )
-
-        st.radio(
-            "Do you maintain complete backups of your Google data outside of Google?",
-            ["Yes, regularly", "Yes, occasionally", "No", "I'm not sure"],
-            index=None,
-            key="ar_q4",
-            help=(
-                "A true backup means:\n"
-                "- Data exists on a local drive or offline storage\n"
-                "- It is accessible without logging into Google\n"
-                "- It is updated at least yearly (or on a schedule you can repeat)\n\n"
-                "If your only copy is inside Google, that is NOT a backup."
-            ),
-        )
-
-        st.markdown("### 3) Workflow Reliance")
-
-        st.radio(
-            "Is Google Calendar your primary scheduling system?",
-            ["Yes", "Partially", "No"],
-            index=None,
-            key="wf_q1",
-            help=(
-                "If most of your scheduling truth lives in Google Calendar (appointments, reminders, recurring events), "
-                "select Yes. If it’s mirrored elsewhere or you use another calendar in parallel, choose Partially."
-            ),
-        )
-
-        st.radio(
-            "Do you use Google Docs / Sheets / Workspace for professional or collaborative work?",
-            ["Yes, extensively", "Occasionally", "Rarely", "Never"],
-            index=None,
-            key="wf_q2",
-            help=(
-                "This includes any work where Google is the collaboration layer: shared docs, sheets, folders, permissions, "
-                "comments, version history, etc."
-            ),
-        )
-
-        st.radio(
-            "Do you rely on Google services for active projects or business operations?",
-            ["Yes", "Somewhat", "No"],
-            index=None,
-            key="wf_q3",
-            help=(
-                "Examples: Drive-based project files, Gmail as a business inbox, Calendar for operations, YouTube/Ads, "
-                "Sheets for tracking, etc."
-            ),
-        )
-
-        st.radio(
-            "If access to Google services were lost for 7 days, would it significantly disrupt your work or routines?",
-            ["Yes", "Some disruption", "Minimal disruption", "No"],
-            index=None,
-            key="wf_q4",
-            help=(
-                "Consider what happens if you lose access to Gmail, Drive, Docs/Sheets, Calendar, Photos, YouTube—"
-                "not permanently, but for a week."
-            ),
-        )
-
-        st.markdown("### 4) Resilience / Redundancy")
-
-        st.radio(
-            "Do you actively use a secondary non-Google email provider?",
-            ["Yes, regularly", "Yes, but rarely", "No"],
-            index=None,
-            key="re_q1",
-            help=(
-                "This should be an email you can access independently (Proton, Outlook, iCloud, custom domain, etc.) "
-                "and that is actually used—not just created and forgotten."
-            ),
-        )
-
-        st.radio(
-            "Do you maintain local backups of important Google Drive or Photos data?",
-            ["Yes, comprehensive backups", "Partial backups", "No", "I'm not sure"],
-            index=None,
-            key="re_q2",
-            help=(
-                "“Local backup” means copies exist on your computer or external storage.\n\n"
-                "If the only place your files/photos exist is online inside Google, select No."
-            ),
-        )
-
-        st.radio(
-            "Have you exported your data using Google Takeout within the past year?",
-            ["Yes", "More than a year ago", "Never", "I'm not sure what that is"],
-            index=None,
-            key="re_q3",
-            help=(
-                "Google Takeout lets you export Gmail, Drive, Photos, Calendar, and more.\n\n"
-                "If you've never exported your data, you likely do not know your total data volume or whether your exports are usable.\n\n"
-                "Start here: https://takeout.google.com/"
-            ),
-        )
-
-        st.radio(
-            "Do you use a custom domain email (not tied to Gmail infrastructure)?",
-            ["Yes", "No", "I'm not sure"],
-            index=None,
-            key="re_q4",
-            help=(
-                "Custom domain email means you own the domain (e.g., you@yourdomain.com) and can move providers "
-                "without changing your address. This can reduce long-term lock-in."
-            ),
-        )
-
-        # Submit / Navigate
-        st.divider()
-        missing = unanswered_keys(REQUIRED_KEYS)
-
-        col_a, col_b = st.columns([1, 1])
-
-        with col_a:
-            if st.button("Submit & View Results", type="primary"):
-                if missing:
-                    st.warning(f"Please answer all questions before continuing. ({len(missing)} unanswered)")
-                else:
-                    st.session_state.submitted = True
-                    st.session_state.page = "results"
+        # Tab row (clickable)
+        tab_cols = st.columns(4)
+        for i, t in enumerate(STEP_TITLES):
+            with tab_cols[i]:
+                is_active = (i == step)
+                is_complete = (len(step_missing(i)) == 0)
+                label = f"✅ {t}" if is_complete else t
+                if st.button(label, type=("primary" if is_active else "secondary"), use_container_width=True, key=f"tab_{i}"):
+                    st.session_state.step = i
                     st.rerun()
 
-        with col_b:
-            if st.button("Reset All Answers"):
-                # Clear just the questionnaire keys (and any extras you want)
-                keys_to_clear = REQUIRED_KEYS + ["takeout_size_gb", "page", "submitted"]
-                for k in keys_to_clear:
-                    if k in st.session_state:
-                        del st.session_state[k]
-                init_state()
+        st.markdown('<div class="audit-card step-anim">', unsafe_allow_html=True)
+
+        # ----------------------------
+        # Step content
+        # ----------------------------
+        if step == 0:
+            st.markdown("#### 1) Identity Centralization")
+            st.caption("Note: When uncertainty is selected, exposure is scored conservatively.")
+
+            st.radio(
+                "Is your Gmail address your primary email address?",
+                ["Yes, for almost everything", "Yes, but I also actively use another email", "No"],
+                index=None,
+                key="id_q1",
+            )
+
+            st.radio(
+                "Is this Gmail account used as the password reset email for most of your important accounts?",
+                ["Yes, for most", "For some", "No", "I'm not sure"],
+                index=None,
+                key="id_q2",
+                help=(
+                    "How to check quickly:\n"
+                    "- Think of your top 10 accounts (banking, phone, utilities, domain registrar, creator platforms, "
+                    "shopping, identity/credit, etc.)\n"
+                    "- Check each account’s “email / recovery” settings.\n\n"
+                    "If you’re not sure, assume this is a risk: uncertainty often means the Gmail account is a central reset node."
+                ),
+            )
+
+            st.radio(
+                "Do you use “Sign in with Google” for high-impact services?",
+                ["Yes, frequently", "Occasionally", "Rarely", "Never", "I don't know"],
+                index=None,
+                key="id_q3",
+                help=(
+                    "High-impact examples include:\n"
+                    "- Banking or financial apps\n"
+                    "- Subscription services\n"
+                    "- Work or creator platforms\n"
+                    "- Domain registrars\n\n"
+                    "Check your connected services here:\n"
+                    "https://myaccount.google.com/connections\n\n"
+                    "If you see 10+ apps listed and don't recognize them all, dependency is likely high."
+                ),
+            )
+            st.caption("Optional: check your connected services here → https://myaccount.google.com/connections")
+
+            st.radio(
+                "If your Google account were inaccessible tomorrow, would you immediately lose access to services that are difficult to recreate?",
+                ["Yes", "Possibly", "No", "I'm not sure"],
+                index=None,
+                key="id_q4",
+                help=(
+                    "“Difficult to recreate” examples:\n"
+                    "- Accounts that rely on Gmail for login + reset\n"
+                    "- OAuth-based accounts (Sign in with Google)\n"
+                    "- Accounts protected by Google Voice / Google Authenticator\n"
+                    "- Long-term archives (email history, photos)\n\n"
+                    "If you haven’t tested recovery on a few key accounts recently, it’s normal to be unsure."
+                ),
+            )
+
+            st.radio(
+                "Have you used Google Voice as your primary long-term phone number for account verification or important contact?",
+                ["Yes, for years and across many services", "Yes, for some important services", "No", "I'm not sure"],
+                index=None,
+                key="id_q5",
+                help=(
+                    "How to check:\n"
+                    "- Review your account recovery and 2FA phone numbers for key services.\n"
+                    "- If many accounts list a Google Voice number (instead of your carrier number), that’s a dependency.\n\n"
+                    "Tip: Search your password manager for the Voice number, if you store it in notes."
+                ),
+            )
+
+        elif step == 1:
+            st.markdown("#### 2) Archive Concentration")
+
+            st.radio(
+                "Are your primary documents stored in Google Drive?",
+                ["Yes, almost all", "Yes, but I also store copies elsewhere", "Some", "No"],
+                index=None,
+                key="ar_q1",
+                help=(
+                    "This refers to the *source of truth*.\n\n"
+                    "If your important docs live primarily in Drive and you’d feel pain losing them, select a higher option. "
+                    "If Drive is just a convenience layer and you keep local copies, select lower."
+                ),
+            )
+
+            st.radio(
+                "Are your photos primarily stored in Google Photos?",
+                ["Yes, exclusively", "Yes, but I maintain backups", "Some", "No"],
+                index=None,
+                key="ar_q2",
+                help=(
+                    "Backups mean: photos exist somewhere outside Google (local drive, external drive, another provider) "
+                    "and are accessible without logging into Google."
+                ),
+            )
+
+            st.radio(
+                "Is your Gmail archive important to your personal or professional history?",
+                ["Extremely important", "Somewhat important", "Not very important", "Not important"],
+                index=None,
+                key="ar_q3",
+                help=(
+                    "If you rely on your inbox for receipts, legal/paperwork trails, work history, important relationships, "
+                    "or long-term memory, your Gmail archive is structurally significant."
+                ),
+            )
+
+            st.radio(
+                "Do you maintain complete backups of your Google data outside of Google?",
+                ["Yes, regularly", "Yes, occasionally", "No", "I'm not sure"],
+                index=None,
+                key="ar_q4",
+                help=(
+                    "A true backup means:\n"
+                    "- Data exists on a local drive or offline storage\n"
+                    "- It is accessible without logging into Google\n"
+                    "- It is updated at least yearly (or on a schedule you can repeat)\n\n"
+                    "If your only copy is inside Google, that is NOT a backup."
+                ),
+            )
+
+        elif step == 2:
+            st.markdown("#### 3) Workflow Reliance")
+
+            st.radio(
+                "Is Google Calendar your primary scheduling system?",
+                ["Yes", "Partially", "No"],
+                index=None,
+                key="wf_q1",
+                help=(
+                    "If most of your scheduling truth lives in Google Calendar (appointments, reminders, recurring events), "
+                    "select Yes. If it’s mirrored elsewhere or you use another calendar in parallel, choose Partially."
+                ),
+            )
+
+            st.radio(
+                "Do you use Google Docs / Sheets / Workspace for professional or collaborative work?",
+                ["Yes, extensively", "Occasionally", "Rarely", "Never"],
+                index=None,
+                key="wf_q2",
+                help=(
+                    "This includes any work where Google is the collaboration layer: shared docs, sheets, folders, permissions, "
+                    "comments, version history, etc."
+                ),
+            )
+
+            st.radio(
+                "Do you rely on Google services for active projects or business operations?",
+                ["Yes", "Somewhat", "No"],
+                index=None,
+                key="wf_q3",
+                help=(
+                    "Examples: Drive-based project files, Gmail as a business inbox, Calendar for operations, YouTube/Ads, "
+                    "Sheets for tracking, etc."
+                ),
+            )
+
+            st.radio(
+                "If access to Google services were lost for 7 days, would it significantly disrupt your work or routines?",
+                ["Yes", "Some disruption", "Minimal disruption", "No"],
+                index=None,
+                key="wf_q4",
+                help=(
+                    "Consider what happens if you lose access to Gmail, Drive, Docs/Sheets, Calendar, Photos, YouTube—"
+                    "not permanently, but for a week."
+                ),
+            )
+
+        else:
+            st.markdown("#### 4) Resilience / Redundancy")
+
+            st.radio(
+                "Do you actively use a secondary non-Google email provider?",
+                ["Yes, regularly", "Yes, but rarely", "No"],
+                index=None,
+                key="re_q1",
+                help=(
+                    "This should be an email you can access independently (Proton, Outlook, iCloud, custom domain, etc.) "
+                    "and that is actually used—not just created and forgotten."
+                ),
+            )
+
+            st.radio(
+                "Do you maintain local backups of important Google Drive or Photos data?",
+                ["Yes, comprehensive backups", "Partial backups", "No", "I'm not sure"],
+                index=None,
+                key="re_q2",
+                help=(
+                    "“Local backup” means copies exist on your computer or external storage.\n\n"
+                    "If the only place your files/photos exist is online inside Google, select No."
+                ),
+            )
+
+            st.radio(
+                "Have you exported your data using Google Takeout within the past year?",
+                ["Yes", "More than a year ago", "Never", "I'm not sure what that is"],
+                index=None,
+                key="re_q3",
+                help=(
+                    "Google Takeout lets you export Gmail, Drive, Photos, Calendar, and more.\n\n"
+                    "If you've never exported your data, you likely do not know your total data volume or whether your exports are usable.\n\n"
+                    "Start here: https://takeout.google.com/"
+                ),
+            )
+
+            st.radio(
+                "Do you use a custom domain email (not tied to Gmail infrastructure)?",
+                ["Yes", "No", "I'm not sure"],
+                index=None,
+                key="re_q4",
+                help=(
+                    "Custom domain email means you own the domain (e.g., you@yourdomain.com) and can move providers "
+                    "without changing your address. This can reduce long-term lock-in."
+                ),
+            )
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ----------------------------
+        # Navigation
+        # ----------------------------
+        st.divider()
+
+        missing_here = step_missing(step)
+        missing_all = unanswered_keys(REQUIRED_KEYS)
+
+        nav_l, nav_r, nav_submit = st.columns([1, 1, 2])
+
+        with nav_l:
+            if st.button("← Back", disabled=(step == 0)):
+                st.session_state.step = max(0, step - 1)
                 st.rerun()
+
+        with nav_r:
+            if missing_here:
+                st.caption(f"Answer {len(missing_here)} more to continue.")
+            if st.button("Next →", disabled=(step == 3 or bool(missing_here))):
+                st.session_state.step = min(3, step + 1)
+                st.rerun()
+
+        with nav_submit:
+            if st.button("Submit & View Results", type="primary", disabled=bool(missing_all)):
+                st.session_state.submitted = True
+                st.session_state.page = "results"
+                st.rerun()
+            if missing_all:
+                st.caption(f"{len(missing_all)} unanswered total.")
+
+        # Reset
+        if st.button("Reset All Answers"):
+            keys_to_clear = REQUIRED_KEYS + ["takeout_size_gb", "page", "submitted", "step"]
+            for k in keys_to_clear:
+                if k in st.session_state:
+                    del st.session_state[k]
+            init_state()
+            init_wizard_state()
+            st.rerun()
 
     with right:
         st.subheader("Live Meters")
@@ -420,6 +522,15 @@ if st.session_state.page == "audit":
         st.subheader("Lock-In Index")
         st.caption("Composite is intentionally hidden until you submit.")
 
+        # Optional: small checklist for wizard feel
+        st.write("**Section checklist**")
+        for i, t in enumerate(STEP_TITLES):
+            m = step_missing(i)
+            if not m:
+                st.write(f"- ✅ {t}")
+            else:
+                st.write(f"- ⬜ {t} ({len(m)} unanswered)")
+
 # ----------------------------
 # RESULTS PAGE
 # ----------------------------
@@ -439,11 +550,12 @@ else:
             st.rerun()
     with nav_r:
         if st.button("Start Over (Clear Answers)"):
-            keys_to_clear = REQUIRED_KEYS + ["takeout_size_gb", "page", "submitted"]
+            keys_to_clear = REQUIRED_KEYS + ["takeout_size_gb", "page", "submitted", "step"]
             for k in keys_to_clear:
                 if k in st.session_state:
                     del st.session_state[k]
             init_state()
+            init_wizard_state()
             st.rerun()
 
     st.divider()
@@ -457,9 +569,7 @@ else:
             "- Security overview: https://myaccount.google.com/security\n"
             "- Google Takeout (export your data): https://takeout.google.com/"
         )
-        st.caption(
-            "Tip: The connections page can be long. You can use your browser Find (Ctrl+F) to scan for big services."
-        )
+        st.caption("Tip: The connections page can be long. You can use your browser Find (Ctrl+F) to scan for big services.")
 
     with st.expander("How to Find Accurate Answers (Step-by-Step)", expanded=False):
         st.markdown(
