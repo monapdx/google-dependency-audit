@@ -1,11 +1,24 @@
 import streamlit as st
 
+# ✅ This is the key fix: a container that can wrap Streamlit widgets
+try:
+    from streamlit_extras.stylable_container import stylable_container
+except Exception:
+    stylable_container = None
+
 # ----------------------------
 # Page
 # ----------------------------
 st.set_page_config(page_title="Google Dependency Audit", page_icon="🧭", layout="wide")
 st.title("Google Dependency Audit")
 st.caption("A structural audit of how centralized your digital life is around a Google account.")
+
+if stylable_container is None:
+    st.warning(
+        "Missing dependency: `streamlit-extras`. Add it to requirements.txt:\n\n"
+        "streamlit-extras\n\n"
+        "The app will still run, but the 'card' wrapper won't properly contain widgets."
+    )
 
 # ----------------------------
 # Helpers
@@ -71,21 +84,11 @@ st.markdown(
 /* Slightly tighter max width feel while still "wide" */
 .block-container { padding-top: 1.2rem; }
 
-/* Wizard "card" */
-.audit-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 16px;
-  padding: 18px 18px 12px 18px;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.25);
-}
-
 /* Subtle section transition */
 @keyframes slideFadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0px); }
 }
-.step-anim { animation: slideFadeIn 220ms ease-out; }
 
 /* Make radios feel more tappable without changing theme colors */
 div[role="radiogroup"] label {
@@ -94,8 +97,10 @@ div[role="radiogroup"] label {
   margin: 2px 0;
 }
 
-/* Reduce some vertical bloat */
-.small-gap { margin-top: 0.25rem; }
+/* Step tab buttons spacing a bit tighter */
+div[data-testid="column"] button {
+  border-radius: 12px !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -127,7 +132,7 @@ def step_missing(step_idx: int) -> list[str]:
 
 
 # ----------------------------
-# Common: compute scores from current answers
+# Scoring
 # ----------------------------
 def compute_scores():
     # Identity
@@ -189,7 +194,7 @@ def compute_scores():
     resilience_exposure = re_q1 + re_q2 + re_q3 + re_q4
     redundancy_strength = 12 - resilience_exposure
 
-    # Composite (same as before)
+    # Composite
     risk_total = identity_score + archive_score + workflow_score
     resilience_benefit = 12 - resilience_exposure
     capped_benefit = min(resilience_benefit, int(risk_total * 0.5))  # cap at 50% mitigation
@@ -234,233 +239,254 @@ if st.session_state.page == "audit":
                 is_active = (i == step)
                 is_complete = (len(step_missing(i)) == 0)
                 label = f"✅ {t}" if is_complete else t
-                if st.button(label, type=("primary" if is_active else "secondary"), use_container_width=True, key=f"tab_{i}"):
+                if st.button(
+                    label,
+                    type=("primary" if is_active else "secondary"),
+                    use_container_width=True,
+                    key=f"tab_{i}",
+                ):
                     st.session_state.step = i
                     st.rerun()
 
-        st.markdown('<div class="audit-card step-anim">', unsafe_allow_html=True)
-
-        # ----------------------------
-        # Step content
-        # ----------------------------
-        if step == 0:
-            st.markdown("#### 1) Identity Centralization")
-            st.caption("Note: When uncertainty is selected, exposure is scored conservatively.")
-
-            st.radio(
-                "Is your Gmail address your primary email address?",
-                ["Yes, for almost everything", "Yes, but I also actively use another email", "No"],
-                index=None,
-                key="id_q1",
+        # ✅ Proper widget-wrapping container (fixes your issue)
+        if stylable_container is not None:
+            container_ctx = stylable_container(
+                key=f"step_card_{step}",
+                css_styles="""
+                {
+                  background: rgba(255,255,255,0.04);
+                  border: 1px solid rgba(255,255,255,0.09);
+                  border-radius: 16px;
+                  padding: 18px 18px 12px 18px;
+                  box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+                  animation: slideFadeIn 220ms ease-out;
+                }
+                """,
             )
-
-            st.radio(
-                "Is this Gmail account used as the password reset email for most of your important accounts?",
-                ["Yes, for most", "For some", "No", "I'm not sure"],
-                index=None,
-                key="id_q2",
-                help=(
-                    "How to check quickly:\n"
-                    "- Think of your top 10 accounts (banking, phone, utilities, domain registrar, creator platforms, "
-                    "shopping, identity/credit, etc.)\n"
-                    "- Check each account’s “email / recovery” settings.\n\n"
-                    "If you’re not sure, assume this is a risk: uncertainty often means the Gmail account is a central reset node."
-                ),
-            )
-
-            st.radio(
-                "Do you use “Sign in with Google” for high-impact services?",
-                ["Yes, frequently", "Occasionally", "Rarely", "Never", "I don't know"],
-                index=None,
-                key="id_q3",
-                help=(
-                    "High-impact examples include:\n"
-                    "- Banking or financial apps\n"
-                    "- Subscription services\n"
-                    "- Work or creator platforms\n"
-                    "- Domain registrars\n\n"
-                    "Check your connected services here:\n"
-                    "https://myaccount.google.com/connections\n\n"
-                    "If you see 10+ apps listed and don't recognize them all, dependency is likely high."
-                ),
-            )
-            st.caption("Optional: check your connected services here → https://myaccount.google.com/connections")
-
-            st.radio(
-                "If your Google account were inaccessible tomorrow, would you immediately lose access to services that are difficult to recreate?",
-                ["Yes", "Possibly", "No", "I'm not sure"],
-                index=None,
-                key="id_q4",
-                help=(
-                    "“Difficult to recreate” examples:\n"
-                    "- Accounts that rely on Gmail for login + reset\n"
-                    "- OAuth-based accounts (Sign in with Google)\n"
-                    "- Accounts protected by Google Voice / Google Authenticator\n"
-                    "- Long-term archives (email history, photos)\n\n"
-                    "If you haven’t tested recovery on a few key accounts recently, it’s normal to be unsure."
-                ),
-            )
-
-            st.radio(
-                "Have you used Google Voice as your primary long-term phone number for account verification or important contact?",
-                ["Yes, for years and across many services", "Yes, for some important services", "No", "I'm not sure"],
-                index=None,
-                key="id_q5",
-                help=(
-                    "How to check:\n"
-                    "- Review your account recovery and 2FA phone numbers for key services.\n"
-                    "- If many accounts list a Google Voice number (instead of your carrier number), that’s a dependency.\n\n"
-                    "Tip: Search your password manager for the Voice number, if you store it in notes."
-                ),
-            )
-
-        elif step == 1:
-            st.markdown("#### 2) Archive Concentration")
-
-            st.radio(
-                "Are your primary documents stored in Google Drive?",
-                ["Yes, almost all", "Yes, but I also store copies elsewhere", "Some", "No"],
-                index=None,
-                key="ar_q1",
-                help=(
-                    "This refers to the *source of truth*.\n\n"
-                    "If your important docs live primarily in Drive and you’d feel pain losing them, select a higher option. "
-                    "If Drive is just a convenience layer and you keep local copies, select lower."
-                ),
-            )
-
-            st.radio(
-                "Are your photos primarily stored in Google Photos?",
-                ["Yes, exclusively", "Yes, but I maintain backups", "Some", "No"],
-                index=None,
-                key="ar_q2",
-                help=(
-                    "Backups mean: photos exist somewhere outside Google (local drive, external drive, another provider) "
-                    "and are accessible without logging into Google."
-                ),
-            )
-
-            st.radio(
-                "Is your Gmail archive important to your personal or professional history?",
-                ["Extremely important", "Somewhat important", "Not very important", "Not important"],
-                index=None,
-                key="ar_q3",
-                help=(
-                    "If you rely on your inbox for receipts, legal/paperwork trails, work history, important relationships, "
-                    "or long-term memory, your Gmail archive is structurally significant."
-                ),
-            )
-
-            st.radio(
-                "Do you maintain complete backups of your Google data outside of Google?",
-                ["Yes, regularly", "Yes, occasionally", "No", "I'm not sure"],
-                index=None,
-                key="ar_q4",
-                help=(
-                    "A true backup means:\n"
-                    "- Data exists on a local drive or offline storage\n"
-                    "- It is accessible without logging into Google\n"
-                    "- It is updated at least yearly (or on a schedule you can repeat)\n\n"
-                    "If your only copy is inside Google, that is NOT a backup."
-                ),
-            )
-
-        elif step == 2:
-            st.markdown("#### 3) Workflow Reliance")
-
-            st.radio(
-                "Is Google Calendar your primary scheduling system?",
-                ["Yes", "Partially", "No"],
-                index=None,
-                key="wf_q1",
-                help=(
-                    "If most of your scheduling truth lives in Google Calendar (appointments, reminders, recurring events), "
-                    "select Yes. If it’s mirrored elsewhere or you use another calendar in parallel, choose Partially."
-                ),
-            )
-
-            st.radio(
-                "Do you use Google Docs / Sheets / Workspace for professional or collaborative work?",
-                ["Yes, extensively", "Occasionally", "Rarely", "Never"],
-                index=None,
-                key="wf_q2",
-                help=(
-                    "This includes any work where Google is the collaboration layer: shared docs, sheets, folders, permissions, "
-                    "comments, version history, etc."
-                ),
-            )
-
-            st.radio(
-                "Do you rely on Google services for active projects or business operations?",
-                ["Yes", "Somewhat", "No"],
-                index=None,
-                key="wf_q3",
-                help=(
-                    "Examples: Drive-based project files, Gmail as a business inbox, Calendar for operations, YouTube/Ads, "
-                    "Sheets for tracking, etc."
-                ),
-            )
-
-            st.radio(
-                "If access to Google services were lost for 7 days, would it significantly disrupt your work or routines?",
-                ["Yes", "Some disruption", "Minimal disruption", "No"],
-                index=None,
-                key="wf_q4",
-                help=(
-                    "Consider what happens if you lose access to Gmail, Drive, Docs/Sheets, Calendar, Photos, YouTube—"
-                    "not permanently, but for a week."
-                ),
-            )
-
         else:
-            st.markdown("#### 4) Resilience / Redundancy")
+            # fallback: plain container (no true "card wrap" but app still works)
+            container_ctx = st.container()
 
-            st.radio(
-                "Do you actively use a secondary non-Google email provider?",
-                ["Yes, regularly", "Yes, but rarely", "No"],
-                index=None,
-                key="re_q1",
-                help=(
-                    "This should be an email you can access independently (Proton, Outlook, iCloud, custom domain, etc.) "
-                    "and that is actually used—not just created and forgotten."
-                ),
-            )
+        with container_ctx:
+            # ----------------------------
+            # Step content
+            # ----------------------------
+            if step == 0:
+                st.markdown("#### 1) Identity Centralization")
+                st.caption("Note: When uncertainty is selected, exposure is scored conservatively.")
 
-            st.radio(
-                "Do you maintain local backups of important Google Drive or Photos data?",
-                ["Yes, comprehensive backups", "Partial backups", "No", "I'm not sure"],
-                index=None,
-                key="re_q2",
-                help=(
-                    "“Local backup” means copies exist on your computer or external storage.\n\n"
-                    "If the only place your files/photos exist is online inside Google, select No."
-                ),
-            )
+                st.radio(
+                    "Is your Gmail address your primary email address?",
+                    ["Yes, for almost everything", "Yes, but I also actively use another email", "No"],
+                    index=None,
+                    key="id_q1",
+                )
 
-            st.radio(
-                "Have you exported your data using Google Takeout within the past year?",
-                ["Yes", "More than a year ago", "Never", "I'm not sure what that is"],
-                index=None,
-                key="re_q3",
-                help=(
-                    "Google Takeout lets you export Gmail, Drive, Photos, Calendar, and more.\n\n"
-                    "If you've never exported your data, you likely do not know your total data volume or whether your exports are usable.\n\n"
-                    "Start here: https://takeout.google.com/"
-                ),
-            )
+                st.radio(
+                    "Is this Gmail account used as the password reset email for most of your important accounts?",
+                    ["Yes, for most", "For some", "No", "I'm not sure"],
+                    index=None,
+                    key="id_q2",
+                    help=(
+                        "How to check quickly:\n"
+                        "- Think of your top 10 accounts (banking, phone, utilities, domain registrar, creator platforms, "
+                        "shopping, identity/credit, etc.)\n"
+                        "- Check each account’s “email / recovery” settings.\n\n"
+                        "If you’re not sure, assume this is a risk: uncertainty often means the Gmail account is a central reset node."
+                    ),
+                )
 
-            st.radio(
-                "Do you use a custom domain email (not tied to Gmail infrastructure)?",
-                ["Yes", "No", "I'm not sure"],
-                index=None,
-                key="re_q4",
-                help=(
-                    "Custom domain email means you own the domain (e.g., you@yourdomain.com) and can move providers "
-                    "without changing your address. This can reduce long-term lock-in."
-                ),
-            )
+                st.radio(
+                    "Do you use “Sign in with Google” for high-impact services?",
+                    ["Yes, frequently", "Occasionally", "Rarely", "Never", "I don't know"],
+                    index=None,
+                    key="id_q3",
+                    help=(
+                        "High-impact examples include:\n"
+                        "- Banking or financial apps\n"
+                        "- Subscription services\n"
+                        "- Work or creator platforms\n"
+                        "- Domain registrars\n\n"
+                        "Check your connected services here:\n"
+                        "https://myaccount.google.com/connections\n\n"
+                        "If you see 10+ apps listed and don't recognize them all, dependency is likely high."
+                    ),
+                )
+                st.caption("Optional: check your connected services here → https://myaccount.google.com/connections")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+                st.radio(
+                    "If your Google account were inaccessible tomorrow, would you immediately lose access to services that are difficult to recreate?",
+                    ["Yes", "Possibly", "No", "I'm not sure"],
+                    index=None,
+                    key="id_q4",
+                    help=(
+                        "“Difficult to recreate” examples:\n"
+                        "- Accounts that rely on Gmail for login + reset\n"
+                        "- OAuth-based accounts (Sign in with Google)\n"
+                        "- Accounts protected by Google Voice / Google Authenticator\n"
+                        "- Long-term archives (email history, photos)\n\n"
+                        "If you haven’t tested recovery on a few key accounts recently, it’s normal to be unsure."
+                    ),
+                )
+
+                st.radio(
+                    "Have you used Google Voice as your primary long-term phone number for account verification or important contact?",
+                    ["Yes, for years and across many services", "Yes, for some important services", "No", "I'm not sure"],
+                    index=None,
+                    key="id_q5",
+                    help=(
+                        "How to check:\n"
+                        "- Review your account recovery and 2FA phone numbers for key services.\n"
+                        "- If many accounts list a Google Voice number (instead of your carrier number), that’s a dependency.\n\n"
+                        "Tip: Search your password manager for the Voice number, if you store it in notes."
+                    ),
+                )
+
+            elif step == 1:
+                st.markdown("#### 2) Archive Concentration")
+
+                st.radio(
+                    "Are your primary documents stored in Google Drive?",
+                    ["Yes, almost all", "Yes, but I also store copies elsewhere", "Some", "No"],
+                    index=None,
+                    key="ar_q1",
+                    help=(
+                        "This refers to the *source of truth*.\n\n"
+                        "If your important docs live primarily in Drive and you’d feel pain losing them, select a higher option. "
+                        "If Drive is just a convenience layer and you keep local copies, select lower."
+                    ),
+                )
+
+                st.radio(
+                    "Are your photos primarily stored in Google Photos?",
+                    ["Yes, exclusively", "Yes, but I maintain backups", "Some", "No"],
+                    index=None,
+                    key="ar_q2",
+                    help=(
+                        "Backups mean: photos exist somewhere outside Google (local drive, external drive, another provider) "
+                        "and are accessible without logging into Google."
+                    ),
+                )
+
+                st.radio(
+                    "Is your Gmail archive important to your personal or professional history?",
+                    ["Extremely important", "Somewhat important", "Not very important", "Not important"],
+                    index=None,
+                    key="ar_q3",
+                    help=(
+                        "If you rely on your inbox for receipts, legal/paperwork trails, work history, important relationships, "
+                        "or long-term memory, your Gmail archive is structurally significant."
+                    ),
+                )
+
+                st.radio(
+                    "Do you maintain complete backups of your Google data outside of Google?",
+                    ["Yes, regularly", "Yes, occasionally", "No", "I'm not sure"],
+                    index=None,
+                    key="ar_q4",
+                    help=(
+                        "A true backup means:\n"
+                        "- Data exists on a local drive or offline storage\n"
+                        "- It is accessible without logging into Google\n"
+                        "- It is updated at least yearly (or on a schedule you can repeat)\n\n"
+                        "If your only copy is inside Google, that is NOT a backup."
+                    ),
+                )
+
+            elif step == 2:
+                st.markdown("#### 3) Workflow Reliance")
+
+                st.radio(
+                    "Is Google Calendar your primary scheduling system?",
+                    ["Yes", "Partially", "No"],
+                    index=None,
+                    key="wf_q1",
+                    help=(
+                        "If most of your scheduling truth lives in Google Calendar (appointments, reminders, recurring events), "
+                        "select Yes. If it’s mirrored elsewhere or you use another calendar in parallel, choose Partially."
+                    ),
+                )
+
+                st.radio(
+                    "Do you use Google Docs / Sheets / Workspace for professional or collaborative work?",
+                    ["Yes, extensively", "Occasionally", "Rarely", "Never"],
+                    index=None,
+                    key="wf_q2",
+                    help=(
+                        "This includes any work where Google is the collaboration layer: shared docs, sheets, folders, permissions, "
+                        "comments, version history, etc."
+                    ),
+                )
+
+                st.radio(
+                    "Do you rely on Google services for active projects or business operations?",
+                    ["Yes", "Somewhat", "No"],
+                    index=None,
+                    key="wf_q3",
+                    help=(
+                        "Examples: Drive-based project files, Gmail as a business inbox, Calendar for operations, YouTube/Ads, "
+                        "Sheets for tracking, etc."
+                    ),
+                )
+
+                st.radio(
+                    "If access to Google services were lost for 7 days, would it significantly disrupt your work or routines?",
+                    ["Yes", "Some disruption", "Minimal disruption", "No"],
+                    index=None,
+                    key="wf_q4",
+                    help=(
+                        "Consider what happens if you lose access to Gmail, Drive, Docs/Sheets, Calendar, Photos, YouTube—"
+                        "not permanently, but for a week."
+                    ),
+                )
+
+            else:
+                st.markdown("#### 4) Resilience / Redundancy")
+
+                st.radio(
+                    "Do you actively use a secondary non-Google email provider?",
+                    ["Yes, regularly", "Yes, but rarely", "No"],
+                    index=None,
+                    key="re_q1",
+                    help=(
+                        "This should be an email you can access independently (Proton, Outlook, iCloud, custom domain, etc.) "
+                        "and that is actually used—not just created and forgotten."
+                    ),
+                )
+
+                st.radio(
+                    "Do you maintain local backups of important Google Drive or Photos data?",
+                    ["Yes, comprehensive backups", "Partial backups", "No", "I'm not sure"],
+                    index=None,
+                    key="re_q2",
+                    help=(
+                        "“Local backup” means copies exist on your computer or external storage.\n\n"
+                        "If the only place your files/photos exist is online inside Google, select No."
+                    ),
+                )
+
+                st.radio(
+                    "Have you exported your data using Google Takeout within the past year?",
+                    ["Yes", "More than a year ago", "Never", "I'm not sure what that is"],
+                    index=None,
+                    key="re_q3",
+                    help=(
+                        "Google Takeout lets you export Gmail, Drive, Photos, Calendar, and more.\n\n"
+                        "If you've never exported your data, you likely do not know your total data volume or whether your exports are usable.\n\n"
+                        "Start here: https://takeout.google.com/"
+                    ),
+                )
+
+                st.radio(
+                    "Do you use a custom domain email (not tied to Gmail infrastructure)?",
+                    ["Yes", "No", "I'm not sure"],
+                    index=None,
+                    key="re_q4",
+                    help=(
+                        "Custom domain email means you own the domain (e.g., you@yourdomain.com) and can move providers "
+                        "without changing your address. This can reduce long-term lock-in."
+                    ),
+                )
 
         # ----------------------------
         # Navigation
@@ -515,14 +541,16 @@ if st.session_state.page == "audit":
         meter("Archive Concentration", scores["archive_score"], scores["archive_max"])
         meter("Workflow Reliance", scores["workflow_score"], scores["workflow_max"])
 
-        st.write(f"**Resilience / Redundancy** — {level_for(scores['redundancy_strength'], 12)} ({scores['redundancy_strength']}/12)")
+        st.write(
+            f"**Resilience / Redundancy** — {level_for(scores['redundancy_strength'], 12)} "
+            f"({scores['redundancy_strength']}/12)"
+        )
         st.progress(int((scores["redundancy_strength"] / 12) * 100))
 
         st.divider()
         st.subheader("Lock-In Index")
         st.caption("Composite is intentionally hidden until you submit.")
 
-        # Optional: small checklist for wizard feel
         st.write("**Section checklist**")
         for i, t in enumerate(STEP_TITLES):
             m = step_missing(i)
@@ -535,14 +563,12 @@ if st.session_state.page == "audit":
 # RESULTS PAGE
 # ----------------------------
 else:
-    # Guard: if someone lands here without completion, send back
     missing = unanswered_keys(REQUIRED_KEYS)
     if missing:
         st.warning("Results require completing the audit. Redirecting you back to the questionnaire…")
         st.session_state.page = "audit"
         st.rerun()
 
-    # Top navigation
     nav_l, nav_r = st.columns([1, 1])
     with nav_l:
         if st.button("← Back to Questionnaire"):
@@ -561,7 +587,6 @@ else:
     st.divider()
     st.header("Results")
 
-    # Collapsible guidance sections live on Results page now
     with st.expander("Helpful links (optional)", expanded=False):
         st.markdown(
             "- Connected third-party apps & services (Sign in with Google / access grants): "
@@ -569,129 +594,59 @@ else:
             "- Security overview: https://myaccount.google.com/security\n"
             "- Google Takeout (export your data): https://takeout.google.com/"
         )
-        st.caption("Tip: The connections page can be long. You can use your browser Find (Ctrl+F) to scan for big services.")
+        st.caption("Tip: Use browser Find (Ctrl+F) to scan for big services.")
 
     with st.expander("How to Find Accurate Answers (Step-by-Step)", expanded=False):
         st.markdown(
             """
 ### 1) Review Connected Apps (OAuth / “Sign in with Google”)
-
-Go to:
 https://myaccount.google.com/connections
 
-- Scroll through **“Third-party apps & services.”**
-- Look for high-impact services: financial tools, creator platforms, subscriptions, work software.
-- If you see **many services** and don’t recognize them all, your dependency is probably higher than you think.
+- Scroll through **Third-party apps & services**
+- Look for high-impact services (financial, creator platforms, subscriptions, work software)
 
 ---
 
 ### 2) Review Account Security & Recovery
-
-Go to:
 https://myaccount.google.com/security
 
 Check:
-- Recovery email
-- Recovery phone
+- Recovery email / phone
 - 2-step verification methods
-- Devices signed in
-
-Ask yourself:
-If this account were locked, how hard would recovery be?
+- Signed-in devices
 
 ---
 
 ### 3) Export Your Data (Google Takeout)
-
-Google Takeout:
 https://takeout.google.com/
 
-**Suggested export steps:**
-1. Click **“Deselect all.”**
-2. Select only key services (Gmail, Drive, Photos, Calendar).
-3. Click **“Next step.”**
-4. Choose:
-   - File type: **.zip**
-   - File size: **2GB or 4GB**
-   - Delivery method: **Send download link via email**
-5. Click **“Create export.”**
+Suggested export:
+1. Deselect all
+2. Select Gmail, Drive, Photos, Calendar
+3. Next step → zip, 2–4GB parts, email link
+4. Create export
 
 When it finishes:
-- Download the archive(s).
-- Note the **total size** (this reveals your “archive gravity”).
-- Store the export somewhere **outside Google** (local drive, external drive, etc.)
-
-If you’ve never done this → your redundancy is likely low.
+- Download archive(s)
+- Note total size
+- Store outside Google
 """
         )
 
     with st.expander("Selective Backup Strategy (Recommended)", expanded=False):
         st.markdown(
             """
-This is a **high-leverage approach**: instead of exporting *everything*, you deliberately organize and preserve the parts
-of your Google account that matter most.
-
-A selective strategy is not a replacement for Takeout — it’s a **practical backup layer** that is faster to execute and easier to maintain.
-
----
-
-## A) Google Photos: Album-Based “Most Valuable” Backup
-
-If your Photos library is massive, Takeout can be heavy and messy. A lighter strategy:
-
-1. In Google Photos, create a few meaningful albums.
-2. Add only your **most valuable / irreplaceable** photos to those albums.
-3. On desktop, open an album → use **Download all** (downloads a .zip for that album).
-4. Store the downloaded album zips somewhere outside Google (external drive, local archive folder, etc.).
-5. Repeat on a schedule (monthly/quarterly/yearly).
-
-**Album ideas:**
-- “Family / People I Care About”
-- “My Dog / Loki”
-- “Identity & Documents” (IDs, medical, insurance, important paperwork photos)
-- “Work / Portfolio”
-- “Sentimental / Core Memories”
-- “Receipts / Purchases”
-
-Why this works:
-- You don’t need to export 100% of a library to materially reduce risk.
-- If albums already exist, updating and re-downloading is quick.
-- A few curated albums can preserve the *meaningful* history even if you never run a full Takeout.
-
----
-
-## B) Drive: “Vault” Folder + Offline Mirror
-
-Create a single folder in Drive called something like:
-**Drive Vault** / **Archive Vault** / **Critical**
-
-Then:
-- Move or copy your most important docs into that folder.
-- Periodically download the folder to local storage.
-- Optional: keep a second copy on an external drive.
-
----
-
-## C) Gmail: Labels as an Export Plan (Optional)
-
-If Gmail is huge:
-- Create labels like: **Receipts**, **Legal**, **Medical**, **Taxes**, **Identity**, **Work**, **Important People**
-- Label emails over time (or use filters).
-- Later, you can export and store key categories (even if you never export the entire inbox).
-
-Note: Takeout still exports the full mailbox, but labeling helps you *organize value* before exporting.
-
----
-
-## The principle
-
 **Don’t “backup everything” as a fantasy. Backup the irreplaceable as a reality.**
+
+- Photos: curated albums → Download all per album → store offline
+- Drive: “Vault” folder as source-of-truth → periodic offline mirror
+- Gmail: labels for high-value categories (receipts, legal, medical, taxes, identity)
 """
         )
 
     with st.expander("Optional: Archive Gravity Check (Advanced)", expanded=False):
         st.caption(
-            "If you’ve generated a Google Takeout export, you can record the approximate total size here. "
+            "If you’ve generated a Google Takeout export, record the approximate total size here. "
             "This does not affect your score yet—it's just a visibility tool."
         )
         st.number_input(
@@ -699,7 +654,7 @@ Note: Takeout still exports the full mailbox, but labeling helps you *organize v
             min_value=0.0,
             step=1.0,
             value=float(st.session_state.get("takeout_size_gb", 0.0) or 0.0),
-            help="After Takeout finishes, the downloaded .zip parts (or folder) will have a total size. Enter that rough number here.",
+            help="After Takeout finishes, the downloaded .zip parts have a total size. Enter that rough number here.",
             key="takeout_size_gb",
         )
 
@@ -726,30 +681,17 @@ Note: Takeout still exports the full mailbox, but labeling helps you *organize v
     )
 
     st.markdown("### 🔎 Dimension Breakdown")
-
     st.markdown(f"**Identity Centralization — {id_level}**")
-    st.write(
-        "Your Google account functions as a primary identity authority. "
-        "This can include email, password resets, OAuth login, and phone verification (e.g., Google Voice)."
-    )
+    st.write("Email, password resets, OAuth login, and phone verification can make Google a master identity node.")
 
     st.markdown(f"**Archive Concentration — {ar_level}**")
-    st.write(
-        "A significant portion of your documents, photos, or email history resides within Google systems. "
-        "Recovery depends on exports and active backups."
-    )
+    st.write("Documents, photos, and email history inside Google increase archive gravity unless backed up elsewhere.")
 
     st.markdown(f"**Workflow Reliance — {wf_level}**")
-    st.write(
-        "Some daily operations are connected to Google services. A temporary loss of access can affect scheduling, "
-        "collaboration, and project continuity."
-    )
+    st.write("Calendar + docs + collaboration reliance can make short outages painful.")
 
     st.markdown(f"**Resilience / Redundancy — {rd_level}**")
-    st.write(
-        "Resilience reflects whether alternate pathways exist (secondary email, exports, backups, portability). "
-        "Higher resilience reduces single-point exposure."
-    )
+    st.write("Secondary email, exports, and offline backups reduce single-point exposure.")
 
     st.markdown("### 🧮 Lock-In Index")
     st.write(f"**Overall Centralization Level: {overall}**")
@@ -774,11 +716,10 @@ Note: Takeout still exports the full mailbox, but labeling helps you *organize v
         st.write(f"- {b}")
 
     st.markdown("### Strategic Mitigation Options")
-    st.write("Reducing centralization does not require abandoning Google. Structural shifts can be incremental:")
     st.write("- Establish a secondary non-Google email for account recovery.")
     st.write("- Reduce OAuth reliance for high-impact services.")
     st.write("- Export and locally store critical Drive and Photos data.")
-    st.write("- Use a selective backup strategy (albums / vault folders) to preserve the irreplaceable fast.")
+    st.write("- Use a selective backup strategy (albums / vault folders) for fast wins.")
     st.write("- Maintain periodic Google Takeout exports.")
 
     st.info("This report is a snapshot of your current configuration. It’s designed to make structure visible.")
