@@ -276,3 +276,72 @@ button.ghost {
   padding: 12px;
   color: rgba(15,26,19,0.80);
 }
+
+.label{
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: -0.1px;
+  color: rgba(15,26,19,0.78);
+  text-transform: uppercase;
+}
+
+.notesArea{
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.84);
+  color: rgba(15,26,19,0.90);
+  font: inherit;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 110px;
+  box-shadow: inset 0 1px 0 rgba(15,26,19,0.04);
+}
+.notesArea:focus{
+  outline: none;
+  border-color: rgba(80,173,102,0.45);
+  box-shadow: 0 0 0 4px rgba(80,173,102,0.10);
+}
+
+.resultsGrid{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.catGrid{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (max-width: 980px){
+  .catGrid{ grid-template-columns: 1fr; }
+}
+
+.catCard{
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.72);
+  padding: 12px;
+}
+
+.catHead{
+  display:flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.catTitle{
+  font-weight: 950;
+  letter-spacing: -0.2px;
+}
+
+@media print{
+  body{ background: #fff; background-image:none; }
+  .header, .tabsWrap, button{ display:none !important; }
+  .card{ box-shadow:none; backdrop-filter:none; }
+}

@@ -1,9 +1,7 @@
 <script>
   import { fly, fade } from "svelte/transition";
 
-  // Bump key to avoid old cached/stuck answers
   const STORAGE_KEY = "gda_v3";
-
   const STEP_TITLES = ["Identity", "Archive", "Workflow", "Resilience"];
 
   const STEPS = [
@@ -77,13 +75,21 @@ https://myaccount.google.com/connections`,
     {
       title: "Workflow Reliance",
       questions: [
-        { key: "wf_q1", label: "Is Google Calendar your primary scheduling system?", options: ["Yes", "Partially", "No"] },
+        {
+          key: "wf_q1",
+          label: "Is Google Calendar your primary scheduling system?",
+          options: ["Yes", "Partially", "No"],
+        },
         {
           key: "wf_q2",
           label: "Do you use Google Docs / Sheets / Workspace for professional or collaborative work?",
           options: ["Yes, extensively", "Occasionally", "Rarely", "Never"],
         },
-        { key: "wf_q3", label: "Do you rely on Google services for active projects or business operations?", options: ["Yes", "Somewhat", "No"] },
+        {
+          key: "wf_q3",
+          label: "Do you rely on Google services for active projects or business operations?",
+          options: ["Yes", "Somewhat", "No"],
+        },
         {
           key: "wf_q4",
           label: "If access to Google services were lost for 7 days, would it significantly disrupt your work or routines?",
@@ -94,7 +100,11 @@ https://myaccount.google.com/connections`,
     {
       title: "Resilience / Redundancy",
       questions: [
-        { key: "re_q1", label: "Do you actively use a secondary non-Google email provider?", options: ["Yes, regularly", "Yes, but rarely", "No"] },
+        {
+          key: "re_q1",
+          label: "Do you actively use a secondary non-Google email provider?",
+          options: ["Yes, regularly", "Yes, but rarely", "No"],
+        },
         {
           key: "re_q2",
           label: "Do you maintain local backups of important Google Drive or Photos data?",
@@ -105,7 +115,11 @@ https://myaccount.google.com/connections`,
           label: "Have you exported your data using Google Takeout within the past year?",
           options: ["Yes", "More than a year ago", "Never", "I'm not sure what that is"],
         },
-        { key: "re_q4", label: "Do you use a custom domain email (not tied to Gmail infrastructure)?", options: ["Yes", "No", "I'm not sure"] },
+        {
+          key: "re_q4",
+          label: "Do you use a custom domain email (not tied to Gmail infrastructure)?",
+          options: ["Yes", "No", "I'm not sure"],
+        },
       ],
     },
   ];
@@ -114,19 +128,24 @@ https://myaccount.google.com/connections`,
 
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-  // Unanswered is null (NOT "")
+  // unanswered is null (NOT "")
   const blankAnswers = () => Object.fromEntries(REQUIRED_KEYS.map((k) => [k, null]));
   let answers = blankAnswers();
 
+let notes = { overall: "", identity: "", archive: "", workflow: "", resilience: "" };
+
+/** Notes are user-editable commentary saved locally. */
+function setNote(k, v) {
+  notes = { ...notes, [k]: v };
+}
   let step = 0;
   let view = "audit"; // "audit" | "results"
 
-  // ---------- persistence ----------
+  // ---- persistence ----
   function normalizeAnswers(obj) {
     const out = { ...blankAnswers(), ...(obj ?? {}) };
-    // Convert legacy "" to null so validation works
     for (const k of REQUIRED_KEYS) {
-      if (out[k] === "") out[k] = null;
+      if (out[k] === "") out[k] = null; // legacy
     }
     return out;
   }
@@ -136,9 +155,10 @@ https://myaccount.google.com/connections`,
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      step = Number.isFinite(parsed.step) ? clamp(parsed.step, 0, 3) : 0;
+      step = Number.isFinite(parsed.step) ? clamp(parsed.step, 0, STEPS.length - 1) : 0;
       view = parsed.view === "results" ? "results" : "audit";
       answers = normalizeAnswers(parsed.answers);
+      notes = { ...notes, ...(parsed.notes ?? {}) };
     } catch {
       // ignore
     }
@@ -146,7 +166,7 @@ https://myaccount.google.com/connections`,
 
   function saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, view, answers }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, view, answers, notes }));
     } catch {
       // ignore
     }
@@ -155,36 +175,50 @@ https://myaccount.google.com/connections`,
   loadState();
   $: saveState();
 
+  // IMPORTANT: always reassign answers (Svelte will react)
   function setAnswer(k, v) {
     answers = { ...answers, [k]: v };
   }
 
-  // ---------- completion (THE critical fix) ----------
+  // ---- completion logic (explicit & reactive-safe) ----
   function isAnswered(v) {
-    // Only null/undefined/"" is missing
-    // This correctly treats "0", 0, false, etc. as answered if you ever use them.
+    // only these count as missing
     return v !== null && v !== undefined && v !== "";
   }
 
-  function missing(keys) {
-    return keys.filter((k) => !isAnswered(answers[k]));
+  // ✅ Key fix: accept `a` so reactive statements depend on `answers`
+  function missing(keys, a) {
+    return keys.filter((k) => !isAnswered(a[k]));
   }
 
   function stepKeys(i) {
     return STEPS[i].questions.map((q) => q.key);
   }
 
-  $: missingHere = missing(stepKeys(step));
-  $: missingAll = missing(REQUIRED_KEYS);
-  $: completedByStep = STEPS.map((_, i) => missing(stepKeys(i)).length === 0);
-  $: missingCounts = STEPS.map((_, i) => missing(stepKeys(i)).length);
+  // Reactive values: MUST pass `answers` so Svelte reruns on updates
+  $: keysHere = stepKeys(step);
+  $: missingHere = missing(keysHere, answers);
+  $: missingAll = missing(REQUIRED_KEYS, answers);
 
-  // ---------- scoring ----------
+  $: completedByStep = STEPS.map((_, i) => missing(stepKeys(i), answers).length === 0);
+  $: missingCounts = STEPS.map((_, i) => missing(stepKeys(i), answers).length);
+
+  // ---- scoring (same as your earlier logic) ----
   function levelFor(score, max) {
     const levels =
       max === 15
-        ? [["Low", 0, 3], ["Moderate", 4, 7], ["High", 8, 10], ["Very High", 11, 15]]
-        : [["Low", 0, 3], ["Moderate", 4, 7], ["High", 8, 10], ["Very High", 11, 12]];
+        ? [
+            ["Low", 0, 3],
+            ["Moderate", 4, 7],
+            ["High", 8, 10],
+            ["Very High", 11, 15],
+          ]
+        : [
+            ["Low", 0, 3],
+            ["Moderate", 4, 7],
+            ["High", 8, 10],
+            ["Very High", 11, 12],
+          ];
 
     for (const [name, lo, hi] of levels) {
       if (score >= lo && score <= hi) return name;
@@ -194,39 +228,42 @@ https://myaccount.google.com/connections`,
 
   function computeScores(a) {
     // Identity (max 15)
-    const id_q1 = ({ "Yes, for almost everything": 3, "Yes, but I also actively use another email": 2, "No": 0 }[a.id_q1]) ?? 0;
-    const id_q2 = ({ "Yes, for most": 3, "For some": 2, "No": 0, "I'm not sure": 3 }[a.id_q2]) ?? 0;
-    const id_q3 = ({ "Yes, frequently": 3, "Occasionally": 2, "Rarely": 1, "Never": 0, "I don't know": 3 }[a.id_q3]) ?? 0;
-    const id_q4 = ({ "Yes": 3, "Possibly": 2, "No": 0, "I'm not sure": 3 }[a.id_q4]) ?? 0;
-    const id_q5 = ({ "Yes, for years and across many services": 3, "Yes, for some important services": 2, "No": 0, "I'm not sure": 2 }[a.id_q5]) ?? 0;
+    const id_q1 =
+      ({ "Yes, for almost everything": 3, "Yes, but I also actively use another email": 2, No: 0 }[a.id_q1]) ?? 0;
+    const id_q2 = ({ "Yes, for most": 3, "For some": 2, No: 0, "I'm not sure": 3 }[a.id_q2]) ?? 0;
+    const id_q3 = ({ "Yes, frequently": 3, Occasionally: 2, Rarely: 1, Never: 0, "I don't know": 3 }[a.id_q3]) ?? 0;
+    const id_q4 = ({ Yes: 3, Possibly: 2, No: 0, "I'm not sure": 3 }[a.id_q4]) ?? 0;
+    const id_q5 =
+      ({ "Yes, for years and across many services": 3, "Yes, for some important services": 2, No: 0, "I'm not sure": 2 }[
+        a.id_q5
+      ]) ?? 0;
     const identity_score = id_q1 + id_q2 + id_q3 + id_q4 + id_q5;
 
     // Archive (max 12)
-    const ar_q1 = ({ "Yes, almost all": 3, "Yes, but I also store copies elsewhere": 2, "Some": 1, "No": 0 }[a.ar_q1]) ?? 0;
-    const ar_q2 = ({ "Yes, exclusively": 3, "Yes, but I maintain backups": 2, "Some": 1, "No": 0 }[a.ar_q2]) ?? 0;
+    const ar_q1 = ({ "Yes, almost all": 3, "Yes, but I also store copies elsewhere": 2, Some: 1, No: 0 }[a.ar_q1]) ?? 0;
+    const ar_q2 = ({ "Yes, exclusively": 3, "Yes, but I maintain backups": 2, Some: 1, No: 0 }[a.ar_q2]) ?? 0;
     const ar_q3 = ({ "Extremely important": 3, "Somewhat important": 2, "Not very important": 1, "Not important": 0 }[a.ar_q3]) ?? 0;
-    const ar_q4 = ({ "Yes, regularly": 0, "Yes, occasionally": 1, "No": 3, "I'm not sure": 2 }[a.ar_q4]) ?? 0;
+    const ar_q4 = ({ "Yes, regularly": 0, "Yes, occasionally": 1, No: 3, "I'm not sure": 2 }[a.ar_q4]) ?? 0;
     const archive_score = ar_q1 + ar_q2 + ar_q3 + ar_q4;
 
     // Workflow (max 12)
-    const wf_q1 = ({ "Yes": 3, "Partially": 2, "No": 0 }[a.wf_q1]) ?? 0;
-    const wf_q2 = ({ "Yes, extensively": 3, "Occasionally": 2, "Rarely": 1, "Never": 0 }[a.wf_q2]) ?? 0;
-    const wf_q3 = ({ "Yes": 3, "Somewhat": 2, "No": 0 }[a.wf_q3]) ?? 0;
-    const wf_q4 = ({ "Yes": 3, "Some disruption": 2, "Minimal disruption": 1, "No": 0 }[a.wf_q4]) ?? 0;
+    const wf_q1 = ({ Yes: 3, Partially: 2, No: 0 }[a.wf_q1]) ?? 0;
+    const wf_q2 = ({ "Yes, extensively": 3, Occasionally: 2, Rarely: 1, Never: 0 }[a.wf_q2]) ?? 0;
+    const wf_q3 = ({ Yes: 3, Somewhat: 2, No: 0 }[a.wf_q3]) ?? 0;
+    const wf_q4 = ({ Yes: 3, "Some disruption": 2, "Minimal disruption": 1, No: 0 }[a.wf_q4]) ?? 0;
     const workflow_score = wf_q1 + wf_q2 + wf_q3 + wf_q4;
 
     // Resilience exposure (max 12; higher = worse)
-    const re_q1 = ({ "Yes, regularly": 0, "Yes, but rarely": 1, "No": 3 }[a.re_q1]) ?? 0;
-    const re_q2 = ({ "Yes, comprehensive backups": 0, "Partial backups": 1, "No": 3, "I'm not sure": 2 }[a.re_q2]) ?? 0;
-    const re_q3 = ({ "Yes": 0, "More than a year ago": 1, "Never": 3, "I'm not sure what that is": 2 }[a.re_q3]) ?? 0;
-    const re_q4 = ({ "Yes": 0, "No": 2, "I'm not sure": 1 }[a.re_q4]) ?? 0;
+    const re_q1 = ({ "Yes, regularly": 0, "Yes, but rarely": 1, No: 3 }[a.re_q1]) ?? 0;
+    const re_q2 = ({ "Yes, comprehensive backups": 0, "Partial backups": 1, No: 3, "I'm not sure": 2 }[a.re_q2]) ?? 0;
+    const re_q3 = ({ Yes: 0, "More than a year ago": 1, Never: 3, "I'm not sure what that is": 2 }[a.re_q3]) ?? 0;
+    const re_q4 = ({ Yes: 0, No: 2, "I'm not sure": 1 }[a.re_q4]) ?? 0;
 
     const resilience_exposure = re_q1 + re_q2 + re_q3 + re_q4;
     const redundancy_strength = 12 - resilience_exposure;
 
-    // Composite + mitigation cap
     const risk_total = identity_score + archive_score + workflow_score; // 0..39
-    const resilience_benefit = 12 - resilience_exposure; // 0..12 good
+    const resilience_benefit = 12 - resilience_exposure; // 0..12 (good)
     const capped_benefit = Math.min(resilience_benefit, Math.floor(risk_total * 0.5));
     const lock_in_index = clamp(risk_total - capped_benefit, 0, 39);
 
@@ -252,30 +289,71 @@ https://myaccount.google.com/connections`,
     return "High";
   }
 
+  function insightsFor(category, score, max) {
+    const level = levelFor(score, max);
+    const pctVal = Math.round((score / Math.max(1, max)) * 100);
+
+    const common = {
+      identity:
+        "Identity Centralization measures how much your Google account is a single-point-of-failure for logins, verification, and recovery.",
+      archive:
+        "Archive Concentration measures how much of your personal data lives primarily inside Google products (Drive, Photos, Gmail).",
+      workflow:
+        "Workflow Reliance measures how much your day-to-day routines depend on Google working normally.",
+      resilience:
+        "Resilience / Redundancy measures your ability to keep functioning if Google access is interrupted (backups, alternate providers, exports).",
+    }[category];
+
+    const tips = [];
+
+    if (category !== "resilience") {
+      if (level === "Low") tips.push("Good news: this area is not heavily centralized right now.");
+      if (level === "Moderate") tips.push("Some lock‑in exists here—worth addressing before it becomes hard to unwind.");
+      if (level === "High" || level === "Very High")
+        tips.push("This is a meaningful single‑point‑of‑failure. Prioritize at least one mitigation this week.");
+    } else {
+      // resilience is inverse (higher is better)
+      if (score >= 9) tips.push("Strong redundancy: you’ve built real escape hatches.");
+      else if (score >= 5) tips.push("Decent redundancy, but you still have a few fragile areas.");
+      else tips.push("Low redundancy: build at least one offline/local backup path.");
+    }
+
+    if (category === "identity") {
+      tips.push("Mitigations: add a non‑Google recovery email + phone, reduce “Sign in with Google” for critical accounts.");
+    }
+    if (category === "archive") {
+      tips.push("Mitigations: periodic Takeout + keep an offline copy of Drive/Photos that you can open without Google.");
+    }
+    if (category === "workflow") {
+      tips.push("Mitigations: have a “7‑day outage” plan (calendar export, offline docs, alternate comms).");
+    }
+    if (category === "resilience") {
+      tips.push("Mitigations: schedule Takeout, verify you can open the exports, and store them in 2 places.");
+    }
+
+    return { common, level, pctVal, tips };
+  }
+
   function pct(score, max) {
     if (!max) return 0;
     return Math.round((score / max) * 100);
   }
 
-  // ---------- navigation ----------
+  // ---- navigation ----
   function goStep(i) {
     step = clamp(i, 0, STEPS.length - 1);
   }
-
   function back() {
     goStep(step - 1);
   }
-
   function next() {
     if (missingHere.length > 0) return;
     goStep(step + 1);
   }
-
   function submit() {
     if (missingAll.length > 0) return;
     view = "results";
   }
-
   function resetAll() {
     answers = blankAnswers();
     step = 0;
@@ -285,7 +363,7 @@ https://myaccount.google.com/connections`,
     } catch {}
   }
 
-  // ---------- report ----------
+  // ---- report helpers ----
   let copied = false;
 
   function buildReport() {
@@ -368,26 +446,18 @@ https://myaccount.google.com/connections`,
                 Use the tabs or Next/Back. You can’t proceed until the current section is complete.
               </div>
             </div>
-            <div class="badge">
-              Progress&nbsp;<span class="kbd">{pct(step + 1, 4)}%</span>
-            </div>
+            <div class="badge">Progress <span class="kbd">{pct(step + 1, 4)}%</span></div>
           </div>
 
           <div style="margin-top:12px;">
-            <div class="progress">
-              <div style={`width:${pct(step + 1, 4)}%`}></div>
-            </div>
+            <div class="progress"><div style={`width:${pct(step + 1, 4)}%`}></div></div>
           </div>
 
           <div class="tabsWrap" style={`--tabX:${step};`}>
             <div class="tabIndicator" aria-hidden="true"></div>
             <div class="tabs">
               {#each STEP_TITLES as t, i}
-                <button
-                  class={`tabBtn ${i === step ? "active" : ""}`}
-                  on:click={() => goStep(i)}
-                  title={completedByStep[i] ? "Complete" : "Incomplete"}
-                >
+                <button class={`tabBtn ${i === step ? "active" : ""}`} on:click={() => goStep(i)}>
                   {#if completedByStep[i]}✅ {/if}{t}
                 </button>
               {/each}
@@ -423,7 +493,7 @@ https://myaccount.google.com/connections`,
 
                   <div class="options">
                     {#each q.options as opt}
-                      <label class="opt">
+                      <label class="opt" on:click={() => setAnswer(q.key, opt)}>
                         <input
                           type="radio"
                           name={q.key}
@@ -464,7 +534,6 @@ https://myaccount.google.com/connections`,
                 <button class="ghost" on:click={resetAll}>Reset</button>
               </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -547,9 +616,7 @@ https://myaccount.google.com/connections`,
       <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
         <div>
           <div style="font-weight:980; font-size:18px; letter-spacing:-0.2px;">Results</div>
-          <div class="subtle" style="margin-top:6px; font-size:13px;">
-            Snapshot of your current structure. Runs locally; nothing is uploaded.
-          </div>
+          <div class="subtle" style="margin-top:6px; font-size:13px;">Snapshot of your current structure. Runs locally; nothing is uploaded.</div>
         </div>
 
         <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
@@ -567,7 +634,80 @@ https://myaccount.google.com/connections`,
         <span class="badge">Lock-In: <strong style="color: var(--text)">{scores.lock_in_index}/39</strong></span>
       </div>
 
-      <div class="twoCol" style="margin-top:14px;">
+      
+      <div class="resultsGrid" style="margin-top:14px;">
+        <div class="card cardPad">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap;">
+            <div style="font-weight:950;">Your notes</div>
+            <span class="badge">Saved locally</span>
+          </div>
+          <div class="subtle" style="margin-top:6px; font-size:13px;">
+            Add context you want to remember (or paste into a plan). Nothing leaves your device.
+          </div>
+          <textarea
+            class="notesArea"
+            rows="6"
+            placeholder="Optional: what worries you most, what you want to fix first, constraints, dates, etc."
+            bind:value={notes.overall}
+            on:input={(e) => setNote("overall", e.currentTarget.value)}
+          />
+        </div>
+
+        <div class="card cardPad">
+          <div style="font-weight:950; margin-bottom:6px;">Category detail</div>
+          <div class="subtle" style="font-size:13px;">Each block includes an explanation + space for your own notes.</div>
+
+          <div class="catGrid" style="margin-top:10px;">
+            {#each [
+              ["identity", "Identity Centralization", scores.identity_score, scores.identity_max],
+              ["archive", "Archive Concentration", scores.archive_score, scores.archive_max],
+              ["workflow", "Workflow Reliance", scores.workflow_score, scores.workflow_max],
+              ["resilience", "Resilience / Redundancy", scores.redundancy_strength, 12],
+            ] as c (c[0])}
+              {@const meta = insightsFor(c[0], c[2], c[3])}
+
+              <div class="catCard">
+                <div class="catHead">
+                  <div>
+                    <div class="catTitle">{c[1]}</div>
+                    <div class="subtle" style="margin-top:4px; font-size:12.8px;">
+                      {meta.level} · {c[2]}/{c[3]} · {meta.pctVal}%
+                    </div>
+                  </div>
+                  <span class="badge">Score</span>
+                </div>
+
+                <div class="progress" style="margin-top:10px;">
+                  <div style={`width:${pct(c[2], c[3])}%`}></div>
+                </div>
+
+                <div class="callout" style="margin-top:10px;">
+                  <div style="font-weight:900;">What this means</div>
+                  <div style="margin-top:6px; color: rgba(15,26,19,0.74); font-size:12.6px; line-height:1.45;">
+                    {meta.common}
+                  </div>
+                  <ul style="margin: 10px 0 0 0; padding-left: 18px; color: rgba(15,26,19,0.78); line-height: 1.5;">
+                    {#each meta.tips as tip}
+                      <li>{tip}</li>
+                    {/each}
+                  </ul>
+                </div>
+
+                <div class="label" style="margin-top:10px;">Your notes for {c[1]}</div>
+                <textarea
+                  class="notesArea"
+                  rows="4"
+                  placeholder="Add details, accounts to change, where your backups live, etc."
+                  value={notes[c[0]]}
+                  on:input={(e) => setNote(c[0], e.currentTarget.value)}
+                />
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+
+<div class="twoCol" style="margin-top:14px;">
         <div class="card cardPad">
           <div style="font-weight:950; margin-bottom:8px;">Dimension Breakdown</div>
 
@@ -627,8 +767,4 @@ https://myaccount.google.com/connections`,
       </div>
     </div>
   {/if}
-
-  <div class="subtle" style="margin-top:14px; font-size:12.5px;">
-    Tip: If your graph paper tile isn’t showing, confirm the file exists at <span class="kbd">public/graph-paper.png</span>.
-  </div>
 </div>
