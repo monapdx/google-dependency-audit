@@ -1,7 +1,8 @@
 <script>
   import { fly, fade } from "svelte/transition";
 
-  const STORAGE_KEY = "gda_v2";
+  // Bump this if you want to force a fresh localStorage schema
+  const STORAGE_KEY = "gda_v3";
 
   const STEP_TITLES = ["Identity", "Archive", "Workflow", "Resilience"];
 
@@ -13,7 +14,7 @@
         {
           key: "id_q1",
           label: "Is your Gmail address your primary email address?",
-          options: ["Yes, for almost everything", "Yes, but I also actively use another email", "No"]
+          options: ["Yes, for almost everything", "Yes, but I also actively use another email", "No"],
         },
         {
           key: "id_q2",
@@ -23,26 +24,26 @@
 - Think of your top 10 accounts (banking, phone, utilities, domain registrar, creator platforms, shopping, identity/credit, etc.)
 - Check each account’s “email / recovery” settings.
 
-If you’re not sure, assume this is a risk: uncertainty often means the Gmail account is a central reset node.`
+If you’re not sure, assume this is a risk: uncertainty often means the Gmail account is a central reset node.`,
         },
         {
           key: "id_q3",
           label: "Do you use “Sign in with Google” for high-impact services?",
           options: ["Yes, frequently", "Occasionally", "Rarely", "Never", "I don't know"],
           help: `Connected services:
-https://myaccount.google.com/connections`
+https://myaccount.google.com/connections`,
         },
         {
           key: "id_q4",
           label: "If your Google account were inaccessible tomorrow, would you lose access to services that are difficult to recreate?",
-          options: ["Yes", "Possibly", "No", "I'm not sure"]
+          options: ["Yes", "Possibly", "No", "I'm not sure"],
         },
         {
           key: "id_q5",
           label: "Have you used Google Voice as your primary long-term verification number for important services?",
-          options: ["Yes, for years and across many services", "Yes, for some important services", "No", "I'm not sure"]
-        }
-      ]
+          options: ["Yes, for years and across many services", "Yes, for some important services", "No", "I'm not sure"],
+        },
+      ],
     },
     {
       title: "Archive Concentration",
@@ -50,17 +51,17 @@ https://myaccount.google.com/connections`
         {
           key: "ar_q1",
           label: "Are your primary documents stored in Google Drive?",
-          options: ["Yes, almost all", "Yes, but I also store copies elsewhere", "Some", "No"]
+          options: ["Yes, almost all", "Yes, but I also store copies elsewhere", "Some", "No"],
         },
         {
           key: "ar_q2",
           label: "Are your photos primarily stored in Google Photos?",
-          options: ["Yes, exclusively", "Yes, but I maintain backups", "Some", "No"]
+          options: ["Yes, exclusively", "Yes, but I maintain backups", "Some", "No"],
         },
         {
           key: "ar_q3",
           label: "Is your Gmail archive important to your personal or professional history?",
-          options: ["Extremely important", "Somewhat important", "Not very important", "Not important"]
+          options: ["Extremely important", "Somewhat important", "Not very important", "Not important"],
         },
         {
           key: "ar_q4",
@@ -69,9 +70,9 @@ https://myaccount.google.com/connections`
           help: `A true backup means:
 - Data exists on local/offline storage
 - It is accessible without logging into Google
-- It is updated on a schedule you can repeat`
-        }
-      ]
+- It is updated on a schedule you can repeat`,
+        },
+      ],
     },
     {
       title: "Workflow Reliance",
@@ -80,15 +81,15 @@ https://myaccount.google.com/connections`
         {
           key: "wf_q2",
           label: "Do you use Google Docs / Sheets / Workspace for professional or collaborative work?",
-          options: ["Yes, extensively", "Occasionally", "Rarely", "Never"]
+          options: ["Yes, extensively", "Occasionally", "Rarely", "Never"],
         },
         { key: "wf_q3", label: "Do you rely on Google services for active projects or business operations?", options: ["Yes", "Somewhat", "No"] },
         {
           key: "wf_q4",
           label: "If access to Google services were lost for 7 days, would it significantly disrupt your work or routines?",
-          options: ["Yes", "Some disruption", "Minimal disruption", "No"]
-        }
-      ]
+          options: ["Yes", "Some disruption", "Minimal disruption", "No"],
+        },
+      ],
     },
     {
       title: "Resilience / Redundancy",
@@ -97,32 +98,30 @@ https://myaccount.google.com/connections`
         {
           key: "re_q2",
           label: "Do you maintain local backups of important Google Drive or Photos data?",
-          options: ["Yes, comprehensive backups", "Partial backups", "No", "I'm not sure"]
+          options: ["Yes, comprehensive backups", "Partial backups", "No", "I'm not sure"],
         },
         {
           key: "re_q3",
           label: "Have you exported your data using Google Takeout within the past year?",
-          options: ["Yes", "More than a year ago", "Never", "I'm not sure what that is"]
+          options: ["Yes", "More than a year ago", "Never", "I'm not sure what that is"],
         },
-        { key: "re_q4", label: "Do you use a custom domain email (not tied to Gmail infrastructure)?", options: ["Yes", "No", "I'm not sure"] }
-      ]
-    }
+        { key: "re_q4", label: "Do you use a custom domain email (not tied to Gmail infrastructure)?", options: ["Yes", "No", "I'm not sure"] },
+      ],
+    },
   ];
 
   const REQUIRED_KEYS = STEPS.flatMap((s) => s.questions.map((q) => q.key));
-  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+  // ---------- answers + persistence ----------
+  const blankAnswers = () => Object.fromEntries(REQUIRED_KEYS.map((k) => [k, null])); // null = unanswered
+  let answers = blankAnswers();
 
   let step = 0;
   let view = "audit"; // "audit" | "results"
 
-  // Use null for "unanswered"
-  const makeBlankAnswers = () => Object.fromEntries(REQUIRED_KEYS.map((k) => [k, null]));
-  let answers = makeBlankAnswers();
-
-  // ---------- persistence ----------
   function normalizeAnswers(obj) {
-    const out = { ...makeBlankAnswers(), ...(obj ?? {}) };
-    // Convert legacy "" to null, keep everything else as-is
+    const out = { ...blankAnswers(), ...(obj ?? {}) };
+    // normalize legacy values
     for (const k of REQUIRED_KEYS) {
       if (out[k] === "") out[k] = null;
     }
@@ -134,8 +133,7 @@ https://myaccount.google.com/connections`
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-
-      step = Number.isFinite(parsed.step) ? clamp(parsed.step, 0, 3) : 0;
+      step = Number.isFinite(parsed.step) ? Math.max(0, Math.min(3, parsed.step)) : 0;
       view = parsed.view === "results" ? "results" : "audit";
       answers = normalizeAnswers(parsed.answers);
     } catch {
@@ -154,35 +152,47 @@ https://myaccount.google.com/connections`
   loadState();
   $: saveState();
 
-  function setAnswer(k, v) {
-    answers = { ...answers, [k]: v };
+  function setAnswer(key, value) {
+    answers = { ...answers, [key]: value };
   }
 
-  // ---------- missing / completion ----------
+  // ---------- completion logic (THIS is the critical fix) ----------
   function isAnswered(v) {
-    // Only null/undefined means "missing"
-    return v !== null && v !== undefined;
+    // Only these count as "missing"
+    return v !== null && v !== undefined && v !== "";
+    // NOTE: if v is 0, this returns true (0 is allowed)
   }
 
   function missing(keys) {
     return keys.filter((k) => !isAnswered(answers[k]));
   }
 
-  function stepKeys(i) {
-    return STEPS[i].questions.map((q) => q.key);
-  }
+  const stepKeys = (i) => STEPS[i].questions.map((q) => q.key);
 
   $: missingHere = missing(stepKeys(step));
   $: missingAll = missing(REQUIRED_KEYS);
+
   $: completedByStep = STEPS.map((_, i) => missing(stepKeys(i)).length === 0);
   $: missingCounts = STEPS.map((_, i) => missing(stepKeys(i)).length);
 
   // ---------- scoring ----------
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
   function levelFor(score, max) {
     const levels =
       max === 15
-        ? [["Low", 0, 3], ["Moderate", 4, 7], ["High", 8, 10], ["Very High", 11, 15]]
-        : [["Low", 0, 3], ["Moderate", 4, 7], ["High", 8, 10], ["Very High", 11, 12]];
+        ? [
+            ["Low", 0, 3],
+            ["Moderate", 4, 7],
+            ["High", 8, 10],
+            ["Very High", 11, 15],
+          ]
+        : [
+            ["Low", 0, 3],
+            ["Moderate", 4, 7],
+            ["High", 8, 10],
+            ["Very High", 11, 12],
+          ];
 
     for (const [name, lo, hi] of levels) {
       if (score >= lo && score <= hi) return name;
@@ -192,42 +202,39 @@ https://myaccount.google.com/connections`
 
   function computeScores(a) {
     // Identity (max 15)
-    const id_q1 = ({ "Yes, for almost everything": 3, "Yes, but I also actively use another email": 2, "No": 0 })[a.id_q1] ?? 0;
-    const id_q2 = ({ "Yes, for most": 3, "For some": 2, "No": 0, "I'm not sure": 3 })[a.id_q2] ?? 0;
-    const id_q3 = ({ "Yes, frequently": 3, "Occasionally": 2, "Rarely": 1, "Never": 0, "I don't know": 3 })[a.id_q3] ?? 0;
-    const id_q4 = ({ "Yes": 3, "Possibly": 2, "No": 0, "I'm not sure": 3 })[a.id_q4] ?? 0;
-    const id_q5 = ({ "Yes, for years and across many services": 3, "Yes, for some important services": 2, "No": 0, "I'm not sure": 2 })[a.id_q5] ?? 0;
-
+    const id_q1 = ({ "Yes, for almost everything": 3, "Yes, but I also actively use another email": 2, No: 0 }[a.id_q1]) ?? 0;
+    const id_q2 = ({ "Yes, for most": 3, "For some": 2, No: 0, "I'm not sure": 3 }[a.id_q2]) ?? 0;
+    const id_q3 = ({ "Yes, frequently": 3, Occasionally: 2, Rarely: 1, Never: 0, "I don't know": 3 }[a.id_q3]) ?? 0;
+    const id_q4 = ({ Yes: 3, Possibly: 2, No: 0, "I'm not sure": 3 }[a.id_q4]) ?? 0;
+    const id_q5 = ({ "Yes, for years and across many services": 3, "Yes, for some important services": 2, No: 0, "I'm not sure": 2 }[a.id_q5]) ?? 0;
     const identity_score = id_q1 + id_q2 + id_q3 + id_q4 + id_q5;
 
     // Archive (max 12)
-    const ar_q1 = ({ "Yes, almost all": 3, "Yes, but I also store copies elsewhere": 2, "Some": 1, "No": 0 })[a.ar_q1] ?? 0;
-    const ar_q2 = ({ "Yes, exclusively": 3, "Yes, but I maintain backups": 2, "Some": 1, "No": 0 })[a.ar_q2] ?? 0;
-    const ar_q3 = ({ "Extremely important": 3, "Somewhat important": 2, "Not very important": 1, "Not important": 0 })[a.ar_q3] ?? 0;
-    const ar_q4 = ({ "Yes, regularly": 0, "Yes, occasionally": 1, "No": 3, "I'm not sure": 2 })[a.ar_q4] ?? 0;
-
+    const ar_q1 = ({ "Yes, almost all": 3, "Yes, but I also store copies elsewhere": 2, Some: 1, No: 0 }[a.ar_q1]) ?? 0;
+    const ar_q2 = ({ "Yes, exclusively": 3, "Yes, but I maintain backups": 2, Some: 1, No: 0 }[a.ar_q2]) ?? 0;
+    const ar_q3 = ({ "Extremely important": 3, "Somewhat important": 2, "Not very important": 1, "Not important": 0 }[a.ar_q3]) ?? 0;
+    const ar_q4 = ({ "Yes, regularly": 0, "Yes, occasionally": 1, No: 3, "I'm not sure": 2 }[a.ar_q4]) ?? 0;
     const archive_score = ar_q1 + ar_q2 + ar_q3 + ar_q4;
 
     // Workflow (max 12)
-    const wf_q1 = ({ "Yes": 3, "Partially": 2, "No": 0 })[a.wf_q1] ?? 0;
-    const wf_q2 = ({ "Yes, extensively": 3, "Occasionally": 2, "Rarely": 1, "Never": 0 })[a.wf_q2] ?? 0;
-    const wf_q3 = ({ "Yes": 3, "Somewhat": 2, "No": 0 })[a.wf_q3] ?? 0;
-    const wf_q4 = ({ "Yes": 3, "Some disruption": 2, "Minimal disruption": 1, "No": 0 })[a.wf_q4] ?? 0;
-
+    const wf_q1 = ({ Yes: 3, Partially: 2, No: 0 }[a.wf_q1]) ?? 0;
+    const wf_q2 = ({ "Yes, extensively": 3, Occasionally: 2, Rarely: 1, Never: 0 }[a.wf_q2]) ?? 0;
+    const wf_q3 = ({ Yes: 3, Somewhat: 2, No: 0 }[a.wf_q3]) ?? 0;
+    const wf_q4 = ({ Yes: 3, "Some disruption": 2, "Minimal disruption": 1, No: 0 }[a.wf_q4]) ?? 0;
     const workflow_score = wf_q1 + wf_q2 + wf_q3 + wf_q4;
 
     // Resilience exposure (max 12; higher = worse)
-    const re_q1 = ({ "Yes, regularly": 0, "Yes, but rarely": 1, "No": 3 })[a.re_q1] ?? 0;
-    const re_q2 = ({ "Yes, comprehensive backups": 0, "Partial backups": 1, "No": 3, "I'm not sure": 2 })[a.re_q2] ?? 0;
-    const re_q3 = ({ "Yes": 0, "More than a year ago": 1, "Never": 3, "I'm not sure what that is": 2 })[a.re_q3] ?? 0;
-    const re_q4 = ({ "Yes": 0, "No": 2, "I'm not sure": 1 })[a.re_q4] ?? 0;
+    const re_q1 = ({ "Yes, regularly": 0, "Yes, but rarely": 1, No: 3 }[a.re_q1]) ?? 0;
+    const re_q2 = ({ "Yes, comprehensive backups": 0, "Partial backups": 1, No: 3, "I'm not sure": 2 }[a.re_q2]) ?? 0;
+    const re_q3 = ({ Yes: 0, "More than a year ago": 1, Never: 3, "I'm not sure what that is": 2 }[a.re_q3]) ?? 0;
+    const re_q4 = ({ Yes: 0, No: 2, "I'm not sure": 1 }[a.re_q4]) ?? 0;
 
     const resilience_exposure = re_q1 + re_q2 + re_q3 + re_q4;
     const redundancy_strength = 12 - resilience_exposure;
 
     // Composite + mitigation cap
     const risk_total = identity_score + archive_score + workflow_score; // 0..39
-    const resilience_benefit = 12 - resilience_exposure; // 0..12 good
+    const resilience_benefit = 12 - resilience_exposure; // 0..12 (good)
     const capped_benefit = Math.min(resilience_benefit, Math.floor(risk_total * 0.5));
     const lock_in_index = clamp(risk_total - capped_benefit, 0, 39);
 
@@ -240,7 +247,7 @@ https://myaccount.google.com/connections`
       workflow_max: 12,
       resilience_exposure,
       redundancy_strength,
-      lock_in_index
+      lock_in_index,
     };
   }
 
@@ -262,23 +269,19 @@ https://myaccount.google.com/connections`
   function goStep(i) {
     step = clamp(i, 0, STEPS.length - 1);
   }
-
   function back() {
     goStep(step - 1);
   }
-
   function next() {
     if (missingHere.length > 0) return;
     goStep(step + 1);
   }
-
   function submit() {
     if (missingAll.length > 0) return;
     view = "results";
   }
-
   function resetAll() {
-    answers = makeBlankAnswers();
+    answers = blankAnswers();
     step = 0;
     view = "audit";
     try {
@@ -286,7 +289,7 @@ https://myaccount.google.com/connections`
     } catch {}
   }
 
-  // ---------- report + export ----------
+  // ---------- report ----------
   let copied = false;
 
   function buildReport() {
@@ -310,7 +313,7 @@ https://myaccount.google.com/connections`
       "Links:",
       "- Connected services: https://myaccount.google.com/connections",
       "- Security: https://myaccount.google.com/security",
-      "- Takeout: https://takeout.google.com/"
+      "- Takeout: https://takeout.google.com/",
     ].join("\n");
   }
 
@@ -343,7 +346,7 @@ https://myaccount.google.com/connections`
     <div>
       <h1>Google Dependency Audit</h1>
       <p class="subtle">
-        A structural audit of how centralized your digital life is around a Google account. Runs entirely in your browser (localStorage).
+        Runs entirely in your browser (localStorage). Nothing is uploaded. <span class="kbd">v3</span>
       </p>
     </div>
 
@@ -369,9 +372,7 @@ https://myaccount.google.com/connections`
                 Use the tabs or Next/Back. You can’t proceed until the current section is complete.
               </div>
             </div>
-            <div class="badge">
-              Progress&nbsp;<span class="kbd">{pct(step + 1, 4)}%</span>
-            </div>
+            <div class="badge">Progress <span class="kbd">{pct(step + 1, 4)}%</span></div>
           </div>
 
           <div style="margin-top:12px;">
@@ -380,7 +381,6 @@ https://myaccount.google.com/connections`
             </div>
           </div>
 
-          <!-- Animated tab bar -->
           <div class="tabsWrap" style={`--tabX:${step};`}>
             <div class="tabIndicator" aria-hidden="true"></div>
             <div class="tabs">
@@ -398,7 +398,6 @@ https://myaccount.google.com/connections`
         </div>
 
         <div style="margin-top: 14px;">
-          <!-- single transition ONLY -->
           <div class="card cardPad" in:fly={{ y: 10, duration: 220 }}>
             <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:baseline;">
               <div>
