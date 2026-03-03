@@ -19,8 +19,7 @@
           key: "id_q2",
           label: "Is this Gmail used as the password reset email for most of your important accounts?",
           options: ["Yes, for most", "For some", "No", "I'm not sure"],
-          help:
-`How to check quickly:
+          help: `How to check quickly:
 - Think of your top 10 accounts (banking, phone, utilities, domain registrar, creator platforms, shopping, identity/credit, etc.)
 - Check each account’s “email / recovery” settings.
 
@@ -30,8 +29,7 @@ If you’re not sure, assume this is a risk: uncertainty often means the Gmail a
           key: "id_q3",
           label: "Do you use “Sign in with Google” for high-impact services?",
           options: ["Yes, frequently", "Occasionally", "Rarely", "Never", "I don't know"],
-          help:
-`Connected services:
+          help: `Connected services:
 https://myaccount.google.com/connections`
         },
         {
@@ -68,8 +66,7 @@ https://myaccount.google.com/connections`
           key: "ar_q4",
           label: "Do you maintain complete backups of your Google data outside of Google?",
           options: ["Yes, regularly", "Yes, occasionally", "No", "I'm not sure"],
-          help:
-`A true backup means:
+          help: `A true backup means:
 - Data exists on local/offline storage
 - It is accessible without logging into Google
 - It is updated on a schedule you can repeat`
@@ -112,22 +109,35 @@ https://myaccount.google.com/connections`
     }
   ];
 
-  const REQUIRED_KEYS = STEPS.flatMap(s => s.questions.map(q => q.key));
+  const REQUIRED_KEYS = STEPS.flatMap((s) => s.questions.map((q) => q.key));
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
   let step = 0;
   let view = "audit"; // "audit" | "results"
-  let answers = Object.fromEntries(REQUIRED_KEYS.map(k => [k, ""]));
+
+  // Use null for "unanswered"
+  const makeBlankAnswers = () => Object.fromEntries(REQUIRED_KEYS.map((k) => [k, null]));
+  let answers = makeBlankAnswers();
 
   // ---------- persistence ----------
+  function normalizeAnswers(obj) {
+    const out = { ...makeBlankAnswers(), ...(obj ?? {}) };
+    // Convert legacy "" to null, keep everything else as-is
+    for (const k of REQUIRED_KEYS) {
+      if (out[k] === "") out[k] = null;
+    }
+    return out;
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
+
       step = Number.isFinite(parsed.step) ? clamp(parsed.step, 0, 3) : 0;
       view = parsed.view === "results" ? "results" : "audit";
-      answers = { ...answers, ...(parsed.answers ?? {}) };
+      answers = normalizeAnswers(parsed.answers);
     } catch {
       // ignore
     }
@@ -148,13 +158,20 @@ https://myaccount.google.com/connections`
     answers = { ...answers, [k]: v };
   }
 
-  // ---------- missing ----------
+  // ---------- missing / completion ----------
+  function isAnswered(v) {
+    // Only null/undefined means "missing"
+    return v !== null && v !== undefined;
+  }
+
   function missing(keys) {
-    return keys.filter(k => !answers[k]);
+    return keys.filter((k) => !isAnswered(answers[k]));
   }
+
   function stepKeys(i) {
-    return STEPS[i].questions.map(q => q.key);
+    return STEPS[i].questions.map((q) => q.key);
   }
+
   $: missingHere = missing(stepKeys(step));
   $: missingAll = missing(REQUIRED_KEYS);
   $: completedByStep = STEPS.map((_, i) => missing(stepKeys(i)).length === 0);
@@ -164,8 +181,9 @@ https://myaccount.google.com/connections`
   function levelFor(score, max) {
     const levels =
       max === 15
-        ? [["Low",0,3],["Moderate",4,7],["High",8,10],["Very High",11,15]]
-        : [["Low",0,3],["Moderate",4,7],["High",8,10],["Very High",11,12]];
+        ? [["Low", 0, 3], ["Moderate", 4, 7], ["High", 8, 10], ["Very High", 11, 15]]
+        : [["Low", 0, 3], ["Moderate", 4, 7], ["High", 8, 10], ["Very High", 11, 12]];
+
     for (const [name, lo, hi] of levels) {
       if (score >= lo && score <= hi) return name;
     }
@@ -174,49 +192,52 @@ https://myaccount.google.com/connections`
 
   function computeScores(a) {
     // Identity (max 15)
-    const id_q1 = ({ "Yes, for almost everything":3, "Yes, but I also actively use another email":2, "No":0 })[a.id_q1] ?? 0;
-    const id_q2 = ({ "Yes, for most":3, "For some":2, "No":0, "I'm not sure":3 })[a.id_q2] ?? 0;
-    const id_q3 = ({ "Yes, frequently":3, "Occasionally":2, "Rarely":1, "Never":0, "I don't know":3 })[a.id_q3] ?? 0;
-    const id_q4 = ({ "Yes":3, "Possibly":2, "No":0, "I'm not sure":3 })[a.id_q4] ?? 0;
-    const id_q5 = ({ "Yes, for years and across many services":3, "Yes, for some important services":2, "No":0, "I'm not sure":2 })[a.id_q5] ?? 0;
+    const id_q1 = ({ "Yes, for almost everything": 3, "Yes, but I also actively use another email": 2, "No": 0 })[a.id_q1] ?? 0;
+    const id_q2 = ({ "Yes, for most": 3, "For some": 2, "No": 0, "I'm not sure": 3 })[a.id_q2] ?? 0;
+    const id_q3 = ({ "Yes, frequently": 3, "Occasionally": 2, "Rarely": 1, "Never": 0, "I don't know": 3 })[a.id_q3] ?? 0;
+    const id_q4 = ({ "Yes": 3, "Possibly": 2, "No": 0, "I'm not sure": 3 })[a.id_q4] ?? 0;
+    const id_q5 = ({ "Yes, for years and across many services": 3, "Yes, for some important services": 2, "No": 0, "I'm not sure": 2 })[a.id_q5] ?? 0;
 
     const identity_score = id_q1 + id_q2 + id_q3 + id_q4 + id_q5;
 
     // Archive (max 12)
-    const ar_q1 = ({ "Yes, almost all":3, "Yes, but I also store copies elsewhere":2, "Some":1, "No":0 })[a.ar_q1] ?? 0;
-    const ar_q2 = ({ "Yes, exclusively":3, "Yes, but I maintain backups":2, "Some":1, "No":0 })[a.ar_q2] ?? 0;
-    const ar_q3 = ({ "Extremely important":3, "Somewhat important":2, "Not very important":1, "Not important":0 })[a.ar_q3] ?? 0;
-    const ar_q4 = ({ "Yes, regularly":0, "Yes, occasionally":1, "No":3, "I'm not sure":2 })[a.ar_q4] ?? 0;
+    const ar_q1 = ({ "Yes, almost all": 3, "Yes, but I also store copies elsewhere": 2, "Some": 1, "No": 0 })[a.ar_q1] ?? 0;
+    const ar_q2 = ({ "Yes, exclusively": 3, "Yes, but I maintain backups": 2, "Some": 1, "No": 0 })[a.ar_q2] ?? 0;
+    const ar_q3 = ({ "Extremely important": 3, "Somewhat important": 2, "Not very important": 1, "Not important": 0 })[a.ar_q3] ?? 0;
+    const ar_q4 = ({ "Yes, regularly": 0, "Yes, occasionally": 1, "No": 3, "I'm not sure": 2 })[a.ar_q4] ?? 0;
 
     const archive_score = ar_q1 + ar_q2 + ar_q3 + ar_q4;
 
     // Workflow (max 12)
-    const wf_q1 = ({ "Yes":3, "Partially":2, "No":0 })[a.wf_q1] ?? 0;
-    const wf_q2 = ({ "Yes, extensively":3, "Occasionally":2, "Rarely":1, "Never":0 })[a.wf_q2] ?? 0;
-    const wf_q3 = ({ "Yes":3, "Somewhat":2, "No":0 })[a.wf_q3] ?? 0;
-    const wf_q4 = ({ "Yes":3, "Some disruption":2, "Minimal disruption":1, "No":0 })[a.wf_q4] ?? 0;
+    const wf_q1 = ({ "Yes": 3, "Partially": 2, "No": 0 })[a.wf_q1] ?? 0;
+    const wf_q2 = ({ "Yes, extensively": 3, "Occasionally": 2, "Rarely": 1, "Never": 0 })[a.wf_q2] ?? 0;
+    const wf_q3 = ({ "Yes": 3, "Somewhat": 2, "No": 0 })[a.wf_q3] ?? 0;
+    const wf_q4 = ({ "Yes": 3, "Some disruption": 2, "Minimal disruption": 1, "No": 0 })[a.wf_q4] ?? 0;
 
     const workflow_score = wf_q1 + wf_q2 + wf_q3 + wf_q4;
 
     // Resilience exposure (max 12; higher = worse)
-    const re_q1 = ({ "Yes, regularly":0, "Yes, but rarely":1, "No":3 })[a.re_q1] ?? 0;
-    const re_q2 = ({ "Yes, comprehensive backups":0, "Partial backups":1, "No":3, "I'm not sure":2 })[a.re_q2] ?? 0;
-    const re_q3 = ({ "Yes":0, "More than a year ago":1, "Never":3, "I'm not sure what that is":2 })[a.re_q3] ?? 0;
-    const re_q4 = ({ "Yes":0, "No":2, "I'm not sure":1 })[a.re_q4] ?? 0;
+    const re_q1 = ({ "Yes, regularly": 0, "Yes, but rarely": 1, "No": 3 })[a.re_q1] ?? 0;
+    const re_q2 = ({ "Yes, comprehensive backups": 0, "Partial backups": 1, "No": 3, "I'm not sure": 2 })[a.re_q2] ?? 0;
+    const re_q3 = ({ "Yes": 0, "More than a year ago": 1, "Never": 3, "I'm not sure what that is": 2 })[a.re_q3] ?? 0;
+    const re_q4 = ({ "Yes": 0, "No": 2, "I'm not sure": 1 })[a.re_q4] ?? 0;
 
     const resilience_exposure = re_q1 + re_q2 + re_q3 + re_q4;
     const redundancy_strength = 12 - resilience_exposure;
 
     // Composite + mitigation cap
     const risk_total = identity_score + archive_score + workflow_score; // 0..39
-    const resilience_benefit = 12 - resilience_exposure;               // 0..12 good
+    const resilience_benefit = 12 - resilience_exposure; // 0..12 good
     const capped_benefit = Math.min(resilience_benefit, Math.floor(risk_total * 0.5));
     const lock_in_index = clamp(risk_total - capped_benefit, 0, 39);
 
     return {
-      identity_score, identity_max: 15,
-      archive_score, archive_max: 12,
-      workflow_score, workflow_max: 12,
+      identity_score,
+      identity_max: 15,
+      archive_score,
+      archive_max: 12,
+      workflow_score,
+      workflow_max: 12,
       resilience_exposure,
       redundancy_strength,
       lock_in_index
@@ -241,20 +262,28 @@ https://myaccount.google.com/connections`
   function goStep(i) {
     step = clamp(i, 0, STEPS.length - 1);
   }
-  function back() { goStep(step - 1); }
+
+  function back() {
+    goStep(step - 1);
+  }
+
   function next() {
     if (missingHere.length > 0) return;
     goStep(step + 1);
   }
+
   function submit() {
     if (missingAll.length > 0) return;
     view = "results";
   }
+
   function resetAll() {
-    answers = Object.fromEntries(REQUIRED_KEYS.map(k => [k, ""]));
+    answers = makeBlankAnswers();
     step = 0;
     view = "audit";
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
   }
 
   // ---------- report + export ----------
@@ -314,8 +343,7 @@ https://myaccount.google.com/connections`
     <div>
       <h1>Google Dependency Audit</h1>
       <p class="subtle">
-        A structural audit of how centralized your digital life is around a Google account.
-        Runs entirely in your browser (localStorage).
+        A structural audit of how centralized your digital life is around a Google account. Runs entirely in your browser (localStorage).
       </p>
     </div>
 
@@ -402,8 +430,9 @@ https://myaccount.google.com/connections`
                         <input
                           type="radio"
                           name={q.key}
+                          value={opt}
                           checked={answers[q.key] === opt}
-                          on:change={() => setAnswer(q.key, opt)}
+                          on:change={(e) => setAnswer(q.key, e.currentTarget.value)}
                         />
                         <div class="txt">{opt}</div>
                       </label>
@@ -494,8 +523,7 @@ https://myaccount.google.com/connections`
           <div class="callout" style="margin-top:10px;">
             <div style="font-weight:900;">How it’s calculated</div>
             <div style="margin-top:6px; color: rgba(15,26,19,0.72); font-size:12.5px; line-height:1.4;">
-              Lock-In Index = (identity + archive + workflow) minus resilience mitigation, capped at 50%.
-              “I’m not sure” is scored conservatively.
+              Lock-In Index = (identity + archive + workflow) minus resilience mitigation, capped at 50%. “I’m not sure” is scored conservatively.
             </div>
           </div>
 
@@ -516,7 +544,6 @@ https://myaccount.google.com/connections`
         </div>
       </div>
     </div>
-
   {:else}
     <div class="card cardPad" in:fly={{ y: 12, duration: 260 }}>
       <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
